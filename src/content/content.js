@@ -174,10 +174,19 @@
     (document.head || document.documentElement).appendChild(script);
   }
 
-  // ── background → overlay 브릿지 ──────────────────────────────────────────
+  // ── background / popup 메시지 처리 ───────────────────────────────────────
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'SPIKE_UPDATE' || msg.type === 'STATS_UPDATE') {
       window.postMessage({ source: 'chzzk-analyzer-bg', ...msg }, '*');
+    }
+
+    if (msg.type === 'SEEK_TO') {
+      const video = getVideoEl();
+      if (video && !isNaN(msg.sec)) {
+        video.currentTime = msg.sec;
+        video.play().catch(() => {});
+        INFO('seeked to', msg.sec);
+      }
     }
   });
 

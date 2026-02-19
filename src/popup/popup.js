@@ -93,14 +93,23 @@ function renderSession(session) {
 
   spikeList.innerHTML = session.spikes
     .map(
-      (s) => `
-      <div class="spike-item">
-        <span class="spike-time">${s.hms}</span>
+      (s, i) => `
+      <div class="spike-item" data-index="${i}" data-sec="${s.startSec ?? ''}" title="클릭하면 해당 시점으로 이동">
+        <span class="spike-time">▶ ${s.hms}</span>
         <span class="spike-count">${s.count}개/30s</span>
         <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
       </div>`
     )
     .join('');
+
+  // 클릭 시 영상 해당 시점으로 이동
+  spikeList.querySelectorAll('.spike-item[data-sec]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const sec = parseFloat(el.dataset.sec);
+      if (isNaN(sec)) return;
+      seekToTime(sec);
+    });
+  });
 }
 
 // ── Export helpers ────────────────────────────────────────────────────────────
@@ -171,6 +180,24 @@ btnSave.addEventListener('click', async () => {
   await bgMessage({ type: 'SAVE_SETTINGS', settings: { zThreshold: z, windowSize: w } });
   setStatus('설정 저장됨');
 });
+
+// ── 영상 시점 이동 ────────────────────────────────────────────────────────────
+async function seekToTime(sec) {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (!tab) return;
+
+  chrome.tabs.sendMessage(tab.id, { type: 'SEEK_TO', sec });
+  setStatus(`▶ ${secToHMS(sec)} 으로 이동`);
+}
+
+function secToHMS(sec) {
+  const s = Math.floor(sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  return [h, m, ss].map((n) => String(n).padStart(2, '0')).join(':');
+}
 
 // ── Background messaging ───────────────────────────────────────────────────────
 function bgMessage(msg) {
