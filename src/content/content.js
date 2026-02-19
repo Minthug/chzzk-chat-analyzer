@@ -4,8 +4,11 @@
 (function () {
   'use strict';
 
-  const LOG = (...args) => console.log('[chzzk-analyzer]', ...args);
-  LOG('content script loaded', window.location.pathname);
+  // 개발 모드에서만 로그 출력 (배포 시 false로 변경)
+  const DEBUG = false;
+  const LOG = (...args) => { if (DEBUG) console.log('[chzzk-analyzer]', ...args); };
+  const INFO = (...args) => console.log('[chzzk-analyzer]', ...args);
+  INFO('content script loaded', window.location.pathname);
 
   // ── 선택자 (치지직 클래스명) ──────────────────────────────────────────────
   const SELECTORS = {
@@ -96,7 +99,6 @@
     flushTimer = setTimeout(() => {
       flushTimer = null;
       if (pendingCount > 0) {
-        LOG('sending', pendingCount, 'chats to background');
         sendChatEvent(pendingCount);
         pendingCount = 0;
       }
@@ -124,7 +126,7 @@
     });
 
     chatObserver.observe(container, { childList: true, subtree: true });
-    LOG('DOM observer started on', container.className);
+    INFO('DOM observer started on', container.className);
 
     chrome.runtime.sendMessage({
       type: 'WS_OPEN',
@@ -140,7 +142,7 @@
   setInterval(() => {
     if (!observedContainer) return;
     if (!observedContainer.isConnected) {
-      LOG('container detached! reconnecting...');
+      INFO('container detached! reconnecting...');
       observedContainer = null;
       tryMount();
     }
