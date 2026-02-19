@@ -4,6 +4,9 @@
 (function () {
   'use strict';
 
+  const LOG = (...args) => console.log('[chzzk-analyzer]', ...args);
+  LOG('content script loaded', window.location.pathname);
+
   // ── 선택자 (치지직 클래스명) ──────────────────────────────────────────────
   const SELECTORS = {
     // VOD 채팅 컨테이너 후보들
@@ -92,10 +95,12 @@
   // 짧은 시간 안에 여러 메시지가 한꺼번에 오는 경우 배치 처리
   function scheduleSend(count) {
     pendingCount += count;
+    LOG('chat detected, pending:', pendingCount);
     if (flushTimer) return;
     flushTimer = setTimeout(() => {
       flushTimer = null;
       if (pendingCount > 0) {
+        LOG('sending', pendingCount, 'chats to background');
         sendChatEvent(pendingCount);
         pendingCount = 0;
       }
@@ -123,7 +128,7 @@
     });
 
     chatObserver.observe(container, { childList: true, subtree: true });
-    console.log('[chzzk-analyzer] DOM observer started on', container.className);
+    LOG('DOM observer started on', container.className);
 
     // 초기 알림
     chrome.runtime.sendMessage({
@@ -140,6 +145,7 @@
 
   function tryMount() {
     const container = findChatContainer();
+    LOG('tryMount - container:', container ? container.className : 'NOT FOUND');
     if (container) {
       startObserving(container);
       injectOverlay();
