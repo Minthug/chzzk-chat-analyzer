@@ -9,17 +9,14 @@
 
   // ── 선택자 (치지직 클래스명) ──────────────────────────────────────────────
   const SELECTORS = {
-    // VOD 채팅 컨테이너 후보들
     vodChatList: [
       '[class*="vod_chatting_list"]',
       '[class*="vod_chatting_content"]',
     ],
-    // 라이브 채팅 컨테이너 후보들
     liveChatList: [
       '[class*="live_chatting_list"]',
       '[class*="live_chatting_content"]',
     ],
-    // 채팅 아이템 후보들
     chatItem: [
       '[class*="vod_chatting_item"]',
       '[class*="live_chatting_item"]',
@@ -59,7 +56,6 @@
     return null;
   }
 
-  // 추가된 노드가 채팅 아이템인지 확인
   function isChatItem(node) {
     if (node.nodeType !== 1) return false;
     return SELECTORS.chatItem.some((sel) => node.matches(sel));
@@ -89,10 +85,10 @@
 
   // ── MutationObserver 설정 ─────────────────────────────────────────────────
   let chatObserver = null;
+  let observedContainer = null;
   let pendingCount = 0;
   let flushTimer = null;
 
-  // 짧은 시간 안에 여러 메시지가 한꺼번에 오는 경우 배치 처리
   function scheduleSend(count) {
     pendingCount += count;
     LOG('chat detected, pending:', pendingCount);
@@ -109,6 +105,7 @@
 
   function startObserving(container) {
     if (chatObserver) chatObserver.disconnect();
+    observedContainer = container;
 
     chatObserver = new MutationObserver((mutations) => {
       let newChats = 0;
@@ -117,7 +114,6 @@
           if (isChatItem(node)) {
             newChats++;
           } else if (node.nodeType === 1) {
-            // 컨테이너 내부에 채팅 아이템이 있을 수 있음
             newChats += node.querySelectorAll(
               SELECTORS.chatItem.join(',')
             ).length;
@@ -130,7 +126,6 @@
     chatObserver.observe(container, { childList: true, subtree: true });
     LOG('DOM observer started on', container.className);
 
-    // 초기 알림
     chrome.runtime.sendMessage({
       type: 'WS_OPEN',
       pageType: getPageType(),
@@ -139,6 +134,17 @@
       timestamp: Date.now(),
     });
   }
+
+  // ── 컨테이너 detach 감지 & 재연결 ────────────────────────────────────────
+  // React가 DOM을 재마운트하면 이전 container가 detach됨 → 재연결 필요
+  setInterval(() => {
+    if (!observedContainer) return;
+    if (!observedContainer.isConnected) {
+      LOG('container detached! reconnecting...');
+      observedContainer = null;
+      tryMount();
+    }
+  }, 2000);
 
   // ── 컨테이너 탐색 & 재시도 ────────────────────────────────────────────────
   let mountTimer = null;
@@ -181,6 +187,7 @@
       overlayInjected = false;
       if (chatObserver) { chatObserver.disconnect(); chatObserver = null; }
       if (mountTimer) { clearTimeout(mountTimer); mountTimer = null; }
+      observedContainer = null;
       chrome.runtime.sendMessage({
         type: 'PAGE_NAVIGATE',
         pageType: getPageType(),
