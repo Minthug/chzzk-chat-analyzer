@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>치지직 채팅 분석기</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      min-height: 200px;
+      background: #0f0f1a;
+      color: #ddd;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+    }
+
+    header {
+      background: #1a1a2e;
+      padding: 12px 16px;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    header h1 { font-size: 14px; font-weight: 600; color: #fff; }
+    header .badge {
+      margin-left: auto;
+      background: #e74c3c;
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      display: none;
+    }
+    header .badge.visible { display: inline; }
+
+    .section {
+      padding: 10px 14px;
+      border-bottom: 1px solid #1e1e2e;
+    }
+    .section-title {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .stat-box {
+      background: #1a1a2e;
+      border-radius: 6px;
+      padding: 8px;
+      text-align: center;
+    }
+    .stat-value { font-size: 20px; font-weight: 700; color: #fff; }
+    .stat-label { font-size: 10px; color: #888; margin-top: 2px; }
+
+    .spike-list {
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .spike-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid #1a1a2e;
+      cursor: pointer;
+    }
+    .spike-item:hover { background: #1a1a2e; }
+    .spike-time { color: #e74c3c; font-weight: 600; min-width: 64px; }
+    .spike-count { color: #aaa; font-size: 11px; }
+    .spike-ratio { margin-left: auto; color: #e67e22; font-size: 11px; }
+
+    .empty-msg {
+      color: #555;
+      text-align: center;
+      padding: 16px 0;
+      font-size: 12px;
+    }
+
+    .export-row {
+      display: flex;
+      gap: 8px;
+      padding: 10px 14px;
+    }
+    .btn {
+      flex: 1;
+      padding: 7px;
+      border: none;
+      border-radius: 5px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn-txt { background: #27ae60; color: #fff; }
+    .btn-csv { background: #2980b9; color: #fff; }
+    .btn-clear { background: #555; color: #fff; }
+    .btn:not(:disabled):hover { opacity: 0.85; }
+
+    .settings-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 0 14px 10px;
+    }
+    .setting-group label {
+      display: block;
+      font-size: 10px;
+      color: #888;
+      margin-bottom: 3px;
+    }
+    .setting-group input {
+      width: 100%;
+      background: #1a1a2e;
+      border: 1px solid #333;
+      color: #ddd;
+      border-radius: 4px;
+      padding: 4px 6px;
+      font-size: 12px;
+    }
+    .btn-save {
+      display: block;
+      width: calc(100% - 28px);
+      margin: 0 14px 10px;
+      padding: 6px;
+      background: #555;
+      color: #ddd;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-save:hover { background: #666; }
+
+    .status-bar {
+      padding: 4px 14px 8px;
+      font-size: 10px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span>📊</span>
+    <h1>치지직 채팅 분석기</h1>
+    <span class="badge" id="spike-badge">스파이크!</span>
+  </header>
+
+  <!-- Stats -->
+  <div class="section">
+    <div class="section-title">현재 세션</div>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-label">총 채팅</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-windows">0</div>
+        <div class="stat-label">분석 구간</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value" id="stat-spikes" style="color:#e74c3c">0</div>
+        <div class="stat-label">급증 감지</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spike list -->
+  <div class="section">
+    <div class="section-title">편집 포인트 (급증 구간)</div>
+    <div class="spike-list" id="spike-list">
+      <div class="empty-msg">채팅 데이터 수집 중...<br>치지직 라이브 또는 VOD를 시청하세요.</div>
+    </div>
+  </div>
+
+  <!-- Export -->
+  <div class="export-row">
+    <button class="btn btn-txt" id="btn-export-txt" disabled>TXT 내보내기</button>
+    <button class="btn btn-csv" id="btn-export-csv" disabled>CSV 내보내기</button>
+    <button class="btn btn-clear" id="btn-clear">초기화</button>
+  </div>
+
+  <!-- Settings -->
+  <div class="section">
+    <div class="section-title">설정</div>
+    <div class="settings-row">
+      <div class="setting-group">
+        <label>Z-Score 임계값 (기본 3.0)</label>
+        <input type="number" id="setting-z" min="1" max="10" step="0.1" value="3.0" />
+      </div>
+      <div class="setting-group">
+        <label>윈도우 크기 (초, 기본 30)</label>
+        <input type="number" id="setting-window" min="10" max="300" step="10" value="30" />
+      </div>
+    </div>
+    <button class="btn-save" id="btn-save-settings">설정 저장</button>
+  </div>
+
+  <div class="status-bar" id="status-bar">대기 중</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
