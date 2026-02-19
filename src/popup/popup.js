@@ -189,5 +189,8 @@ function setStatus(msg) {
 // ── Auto-refresh every 5 seconds ──────────────────────────────────────────────
 setInterval(refreshData, 5000);
 
+// ── 팝업 열리면 뱃지 초기화 ───────────────────────────────────────────────────
+chrome.action.setBadgeText({ text: '' });
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init();

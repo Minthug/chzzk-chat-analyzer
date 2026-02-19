@@ -109,6 +109,9 @@ function flushWindow(session) {
     session.spikes.push(spike);
     console.log('[chzzk-analyzer] Spike detected:', spike);
 
+    // 뱃지 업데이트
+    updateBadge(session.spikes.length);
+
     // Notify content scripts in this tab
     notifyTabs(session.pageId, { type: 'SPIKE_UPDATE', spike });
   }
@@ -124,6 +127,13 @@ function flushWindow(session) {
   // Advance
   session.currentWindowIndex++;
   session.currentWindowCount = 0;
+}
+
+// ── 뱃지 업데이트 ────────────────────────────────────────────────────────────
+function updateBadge(spikeCount) {
+  const text = spikeCount > 0 ? String(spikeCount) : '';
+  chrome.action.setBadgeText({ text });
+  chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
 }
 
 // ── Notify all tabs on this pageId ───────────────────────────────────────────
