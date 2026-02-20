@@ -247,24 +247,17 @@ async function restoreSession(pageId, pageType) {
     if (!stored || !sessions[pageId]) return;
 
     const session = sessions[pageId];
-    // 저장된 데이터가 현재 메모리보다 많을 때만 복원
-    if ((stored.windows?.length || 0) <= session.windows.length) return;
 
-    session.windows       = stored.windows      || [];
+    // 스파이크 기록만 복원 (윈도우는 복원하지 않음)
+    // → 윈도우를 복원하면 기준선 계산이 꼬여서 새 스파이크를 못 잡음
     session.spikes        = stored.spikes       || [];
     session.totalMessages = stored.totalMessages|| 0;
     session.startedAt     = stored.startedAt    || session.startedAt;
     session.pageType      = pageType            || stored.pageType || 'unknown';
-
-    // currentWindowIndex는 복원하지 않음
-    // → 다음 CHAT_MESSAGE에서 videoTimestamp 기준으로 자동 계산됨
-    session.currentWindowIndex    = 0;
-    session.currentWindowStartSec = null;
-    session.currentWindowStartMs  = null;
-    session.currentWindowCount    = 0;
+    // session.windows는 빈 상태 유지 → 새 세션부터 깨끗하게 감지
 
     console.log('[chzzk-analyzer] Restored session:', pageId,
-      session.windows.length, 'windows,', session.spikes.length, 'spikes');
+      'spikes:', session.spikes.length, '(windows fresh for new detection)');
 
     // 복원된 데이터를 overlay에도 전달
     notifyTabs(pageId, {
