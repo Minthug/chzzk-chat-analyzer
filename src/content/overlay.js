@@ -17,6 +17,11 @@
   let animFrame = null;
   let lastDrawHash = '';
 
+  // ── 시크바 마커 상태 ────────────────────────────────────────────────────────
+  let markerContainer = null;
+  let seekBarEl = null;
+  let lastMarkerHash = '';
+
   // ── Selectors for chzzk player ─────────────────────────────────────────────
   const PLAYER_SELECTORS = [
     '.webplayer-internal-view',
@@ -186,6 +191,107 @@
     ctx.fillText('채팅량', 4, 11);
   }
 
+  // ── 시크바 마커 ────────────────────────────────────────────────────────────
+  function findSeekBar() {
+    // pzp-ui-progress__entire-background: 프로그레스바 전체 배경 영역
+    return (
+      document.querySelector('[class*="pzp-ui-progress__entire"]') ||
+      document.querySelector('[class*="pzp-ui-progress"]') ||
+      document.querySelector('[class*="pzp-pc__progress"]') ||
+      null
+    );
+  }
+
+  function setupSeekBarMarkers() {
+    const seekBar = findSeekBar();
+    if (!seekBar) return false;
+
+    // 이미 세팅됐고 DOM에 연결된 경우 재사용
+    if (markerContainer && markerContainer.isConnected) return true;
+
+    seekBarEl = seekBar;
+    if (getComputedStyle(seekBar).position === 'static') {
+      seekBar.style.position = 'relative';
+    }
+
+    markerContainer = document.createElement('div');
+    markerContainer.id = 'chzzk-spike-markers';
+    markerContainer.style.cssText = `
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 99;
+    `;
+    seekBar.appendChild(markerContainer);
+    return true;
+  }
+
+  function updateSeekBarMarkers() {
+    if (spikes.length === 0) return;
+
+    const video = getVideoEl();
+    const duration = video ? video.duration : 0;
+    if (!duration || isNaN(duration)) return;
+
+    // 변경 없으면 스킵
+    const hash = `${spikes.length}|${Math.floor(duration)}`;
+    if (hash === lastMarkerHash && markerContainer?.isConnected) return;
+    lastMarkerHash = hash;
+
+    if (!setupSeekBarMarkers()) return;
+
+    markerContainer.innerHTML = '';
+
+    spikes.forEach((spike) => {
+      if (spike.startSec == null) return;
+      const pct = (spike.startSec / duration) * 100;
+      if (pct < 0 || pct > 100) return;
+
+      const marker = document.createElement('div');
+      marker.style.cssText = `
+        position: absolute;
+        left: ${pct}%;
+        top: 0;
+        width: 3px;
+        height: 100%;
+        background: #e74c3c;
+        transform: translateX(-50%);
+        border-radius: 2px;
+        opacity: 0.9;
+        cursor: pointer;
+        pointer-events: all;
+      `;
+
+      // 툴팁
+      const tooltip = document.createElement('div');
+      tooltip.textContent = `${spike.hms}  ${spike.count}개 (${spike.ratio ?? '?'}x)`;
+      tooltip.style.cssText = `
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.85);
+        color: #fff;
+        font-size: 11px;
+        white-space: nowrap;
+        padding: 3px 7px;
+        border-radius: 4px;
+        pointer-events: none;
+      `;
+      marker.appendChild(tooltip);
+
+      marker.addEventListener('mouseenter', () => { tooltip.style.display = 'block'; });
+      marker.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+      marker.addEventListener('click', () => {
+        if (video) { video.currentTime = spike.startSec; video.play().catch(() => {}); }
+      });
+
+      markerContainer.appendChild(marker);
+    });
+  }
+
   // ── Update spike panel ─────────────────────────────────────────────────────
   function updatePanel() {
     if (!panel) return;
@@ -225,11 +331,12 @@
       windows = msg.windows || [];
       spikes = msg.spikes || [];
       updatePanel();
+      updateSeekBarMarkers();
     }
 
     if (msg.type === 'SPIKE_UPDATE') {
-      // spike already included in next STATS_UPDATE; just force redraw
       lastDrawHash = '';
+      lastMarkerHash = ''; // 마커도 강제 갱신
     }
   });
 
