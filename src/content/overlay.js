@@ -41,7 +41,19 @@
   }
 
   function getVideoEl() {
-    return document.querySelector('video');
+    const videos = Array.from(document.querySelectorAll('video'));
+    if (videos.length === 0) return null;
+    if (videos.length === 1) return videos[0];
+
+    const playing = videos.find(v => !v.paused && v.duration > 60);
+    if (playing) return playing;
+
+    const withDuration = videos.filter(v => v.duration > 60);
+    if (withDuration.length > 0) {
+      return withDuration.reduce((a, b) => a.duration > b.duration ? a : b);
+    }
+
+    return videos[0];
   }
 
   // ── Create overlay elements ────────────────────────────────────────────────
