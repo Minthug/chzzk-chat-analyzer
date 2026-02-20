@@ -110,13 +110,29 @@
     ctx.clearRect(0, 0, W, H);
 
     const maxCount = Math.max(...windows.map(w => w.count), 1);
-    const spikeSet = new Set(spikes.map(s => s.windowIndex));
-    const n        = windows.length;
-    const step     = W / Math.max(n - 1, 1);
+    const spikeSet  = new Set(spikes.map(s => s.windowIndex));
+    const n         = windows.length;
+    const isVod     = windows[0]?.startSec != null;
+    const duration  = video ? video.duration : null;
+
+    // ── x 좌표: VOD는 실제 타임스탬프 기준, Live는 인덱스 기준 ────────────
+    // 재생바 마커(updateMarkers)와 동일하게 startSec / duration 으로 계산해야
+    // 그래프와 마커 위치가 일치함. 풀 영상을 보지 않아도 처음부터 정확한 위치.
+    const hasDuration = isVod && duration && !isNaN(duration) && duration > 0;
+    const fallbackMax = (windows[n - 1].startSec ?? 0) + 30; // duration 미확보 시
+
+    const getX = (w, i) => {
+      if (isVod) {
+        const ref = hasDuration ? duration : fallbackMax;
+        return ((w.startSec ?? 0) / ref) * W;
+      }
+      // Live: 인덱스 기반 (재생바 이동 개념 없음)
+      return i * (W / Math.max(n - 1, 1));
+    };
 
     // 각 포인트의 x, y 계산
     const pts = windows.map((w, i) => ({
-      x: i * step,
+      x: getX(w, i),
       y: H - 4 - (w.count / maxCount) * (H - 8),
       isSpike: spikeSet.has(w.windowIndex),
     }));
@@ -152,8 +168,18 @@
     spikes.forEach((spike) => {
       const idx = windows.findIndex(w => w.windowIndex === spike.windowIndex);
       if (idx < 0) return;
-      const x1 = (Math.max(idx - 1, 0)) * step;
-      const x2 = (Math.min(idx + 1, n - 1)) * step;
+
+      // 그래프 x 좌표도 재생바 마커와 동일한 기준(startSec / duration)으로 계산
+      let x1, x2;
+      if (isVod && spike.startSec != null) {
+        const ref = hasDuration ? duration : fallbackMax;
+        x1 = Math.max(0, ((spike.startSec - 30) / ref) * W);
+        x2 = Math.min(W, ((spike.startSec + 30) / ref) * W);
+      } else {
+        const step = W / Math.max(n - 1, 1);
+        x1 = Math.max(idx - 1, 0) * step;
+        x2 = Math.min(idx + 1, n - 1) * step;
+      }
 
       const spikeGrad = ctx.createLinearGradient(0, 0, 0, H);
       spikeGrad.addColorStop(0, 'rgba(255, 80, 80, 0.7)');
@@ -204,10 +230,10 @@
     ctx.stroke();
 
     // ── 현재 재생 위치 마커 ──────────────────────────────────────────────────
-    if (currentTime >= 0 && windows[0]?.startSec != null) {
-      const maxSec = (windows[windows.length - 1].startSec || 0) + 30;
-      if (maxSec > 0) {
-        const xPos = (currentTime / maxSec) * W;
+    if (currentTime >= 0 && isVod) {
+      const ref = hasDuration ? duration : fallbackMax;
+      if (ref > 0) {
+        const xPos = (currentTime / ref) * W;
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
         ctx.lineWidth   = 2;
         ctx.beginPath();
