@@ -48,7 +48,6 @@ async function init() {
     return;
   }
 
-  setStatus(`페이지 ID: ${currentPageId}`);
   await refreshData();
 }
 
@@ -75,6 +74,11 @@ function renderSession(session) {
   statTotal.textContent   = session.totalMessages.toLocaleString();
   statWindows.textContent = session.windows.length;
   statSpikes.textContent  = session.spikes.length;
+
+  const savedAt = new Date(session.startedAt).toLocaleString('ko-KR', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+  });
+  setStatus(`저장됨 · 분석 시작: ${savedAt}`);
 
   if (session.spikes.length > 0) {
     spikeBadge.classList.add('visible');

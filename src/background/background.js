@@ -191,14 +191,14 @@ function handleChatMessage(msg) {
   persistSession(session);
 }
 
-// ── Persist session to chrome.storage.session ─────────────────────────────────
+// ── Persist session to chrome.storage.local (브라우저 재시작 후에도 유지) ──────
 let persistTimer = null;
 function persistSession(session) {
   if (persistTimer) return;
   persistTimer = setTimeout(async () => {
     persistTimer = null;
     try {
-      const existing = (await chrome.storage.session.get(STORAGE_KEY))[STORAGE_KEY] || {};
+      const existing = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY] || {};
       existing[session.pageId] = {
         pageId: session.pageId,
         pageType: session.pageType,
@@ -207,7 +207,7 @@ function persistSession(session) {
         spikes: session.spikes,
         totalMessages: session.totalMessages,
       };
-      await chrome.storage.session.set({ [STORAGE_KEY]: existing });
+      await chrome.storage.local.set({ [STORAGE_KEY]: existing });
     } catch (e) {
       console.error('[chzzk-analyzer] Storage error:', e);
     }
@@ -256,7 +256,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
 
     case 'GET_SESSION_DATA': {
-      chrome.storage.session.get(STORAGE_KEY).then((result) => {
+      chrome.storage.local.get(STORAGE_KEY).then((result) => {
         const data = (result[STORAGE_KEY] || {})[msg.pageId] || null;
         sendResponse({ data });
       });
@@ -264,7 +264,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     case 'GET_ALL_SESSIONS': {
-      chrome.storage.session.get(STORAGE_KEY).then((result) => {
+      chrome.storage.local.get(STORAGE_KEY).then((result) => {
         sendResponse({ data: result[STORAGE_KEY] || {} });
       });
       return true;
@@ -272,10 +272,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'CLEAR_SESSION': {
       delete sessions[msg.pageId];
-      chrome.storage.session.get(STORAGE_KEY).then(async (result) => {
+      chrome.storage.local.get(STORAGE_KEY).then(async (result) => {
         const existing = result[STORAGE_KEY] || {};
         delete existing[msg.pageId];
-        await chrome.storage.session.set({ [STORAGE_KEY]: existing });
+        await chrome.storage.local.set({ [STORAGE_KEY]: existing });
         sendResponse({ ok: true });
       });
       return true;
