@@ -1,231 +1,71 @@
 // overlay.js - injected into page (runs in MAIN world via script tag)
-// Draws chat histogram overlay beneath the video player
+// YouTube 스타일 채팅량 그래프 - 재생바 위에 반투명 흰색 히스토그램
 
 (function () {
   'use strict';
 
-  // Avoid double-injection
   if (window.__chzzkOverlayActive) return;
   window.__chzzkOverlayActive = true;
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  let windows = [];
-  let spikes = [];
-  let canvas = null;
-  let panel = null;
-  let container = null;
-  let animFrame = null;
-  let lastDrawHash = '';
-
-  // ── 시크바 마커 상태 ────────────────────────────────────────────────────────
+  // ── 상태 ────────────────────────────────────────────────────────────────────
+  let windows         = [];
+  let spikes          = [];
+  let graphCanvas     = null;
   let markerContainer = null;
-  let seekBarEl = null;
-  let lastMarkerHash = '';
+  let lastDrawHash    = '';
+  let lastMarkerHash  = '';
+  let animFrame       = null;
 
-  // ── Selectors for chzzk player ─────────────────────────────────────────────
-  const PLAYER_SELECTORS = [
-    '.webplayer-internal-view',
-    '.vod-player-wrap',
-    '.live-player-wrap',
-    '[class*="PlayerWrap"]',
-    '[class*="playerWrap"]',
-    '.player_area',
-  ];
-
-  function findPlayerContainer() {
-    for (const sel of PLAYER_SELECTORS) {
-      const el = document.querySelector(sel);
-      if (el) return el;
-    }
-    return null;
-  }
-
+  // ── 비디오 요소 탐색 ─────────────────────────────────────────────────────────
   function getVideoEl() {
     const videos = Array.from(document.querySelectorAll('video'));
     if (videos.length === 0) return null;
     if (videos.length === 1) return videos[0];
-
     const playing = videos.find(v => !v.paused && v.duration > 60);
     if (playing) return playing;
-
     const withDuration = videos.filter(v => v.duration > 60);
-    if (withDuration.length > 0) {
+    if (withDuration.length > 0)
       return withDuration.reduce((a, b) => a.duration > b.duration ? a : b);
-    }
-
     return videos[0];
   }
 
-  // ── Create overlay elements ────────────────────────────────────────────────
-  function createOverlay(playerEl) {
-    // Wrapper
-    container = document.createElement('div');
-    container.id = 'chzzk-analyzer-overlay';
-    container.style.cssText = `
-      position: relative;
-      width: 100%;
-      background: #0d0d0d;
-      border-top: 1px solid #333;
-      user-select: none;
-    `;
-
-    // Canvas
-    canvas = document.createElement('canvas');
-    canvas.style.cssText = `
-      display: block;
-      width: 100%;
-      height: 72px;
-      cursor: pointer;
-    `;
-    canvas.height = 72;
-
-    // Spike panel
-    panel = document.createElement('div');
-    panel.id = 'chzzk-analyzer-panel';
-    panel.style.cssText = `
-      display: none;
-      max-height: 180px;
-      overflow-y: auto;
-      padding: 6px 10px;
-      font: 12px/1.5 monospace;
-      color: #ccc;
-      background: #111;
-      border-top: 1px solid #333;
-    `;
-
-    // Toggle button
-    const toggleBtn = document.createElement('button');
-    toggleBtn.textContent = '📊 편집 포인트';
-    toggleBtn.style.cssText = `
-      position: absolute;
-      top: 4px;
-      right: 8px;
-      padding: 2px 8px;
-      font-size: 11px;
-      background: #1a1a2e;
-      color: #aaa;
-      border: 1px solid #444;
-      border-radius: 4px;
-      cursor: pointer;
-      z-index: 10;
-    `;
-    toggleBtn.addEventListener('click', () => {
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    });
-
-    container.appendChild(canvas);
-    container.appendChild(toggleBtn);
-    container.appendChild(panel);
-
-    // Insert after player
-    playerEl.parentNode.insertBefore(container, playerEl.nextSibling);
-
-    // Canvas click → seek
-    canvas.addEventListener('click', (e) => {
-      if (windows.length === 0) return;
-      const rect = canvas.getBoundingClientRect();
-      const ratio = (e.clientX - rect.left) / rect.width;
-      const maxSec = windows[windows.length - 1].startSec +
-        (windows[0].startSec != null ? 30 : 0);
-      if (maxSec <= 0) return;
-
-      const targetSec = ratio * maxSec;
-      const video = getVideoEl();
-      if (video) video.currentTime = targetSec;
-    });
-
-    startRenderLoop();
-  }
-
-  // ── Render loop ────────────────────────────────────────────────────────────
-  function startRenderLoop() {
-    function loop() {
-      animFrame = requestAnimationFrame(loop);
-      draw();
-    }
-    loop();
-  }
-
-  function draw() {
-    if (!canvas || windows.length === 0) return;
-
-    // Sync canvas pixel width
-    const displayW = canvas.clientWidth;
-    if (canvas.width !== displayW) canvas.width = displayW;
-    const W = canvas.width;
-    const H = canvas.height;
-
-    // Quick hash to skip redundant redraws
-    const video = getVideoEl();
-    const currentTime = video ? Math.floor(video.currentTime) : -1;
-    const hash = `${windows.length}|${spikes.length}|${currentTime}`;
-    if (hash === lastDrawHash) return;
-    lastDrawHash = hash;
-
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#0d0d0d';
-    ctx.fillRect(0, 0, W, H);
-
-    if (windows.length === 0) return;
-
-    const maxCount = Math.max(...windows.map((w) => w.count), 1);
-    const spikeSet = new Set(spikes.map((s) => s.windowIndex));
-
-    const barW = Math.max(1, W / windows.length);
-
-    windows.forEach((w, i) => {
-      const barH = Math.max(1, (w.count / maxCount) * (H - 12));
-      const x = i * barW;
-      const y = H - barH;
-
-      ctx.fillStyle = spikeSet.has(w.windowIndex) ? '#e74c3c' : '#27ae60';
-      ctx.fillRect(x, y, barW - 1, barH);
-    });
-
-    // Current time marker (VOD only)
-    if (currentTime >= 0 && windows[0]?.startSec != null) {
-      const maxSec = (windows[windows.length - 1].startSec || 0) + 30;
-      if (maxSec > 0) {
-        const xPos = (currentTime / maxSec) * W;
-        ctx.strokeStyle = '#f1c40f';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(xPos, 0);
-        ctx.lineTo(xPos, H);
-        ctx.stroke();
-      }
-    }
-
-    // Label
-    ctx.fillStyle = '#666';
-    ctx.font = '10px sans-serif';
-    ctx.fillText('채팅량', 4, 11);
-  }
-
-  // ── 시크바 마커 ────────────────────────────────────────────────────────────
-  function findSeekBar() {
-    // pzp-ui-progress__entire-background: 프로그레스바 전체 배경 영역
+  // ── pzp 재생바 탐색 ──────────────────────────────────────────────────────────
+  function findProgressArea() {
     return (
       document.querySelector('[class*="pzp-ui-progress__entire"]') ||
-      document.querySelector('[class*="pzp-ui-progress"]') ||
-      document.querySelector('[class*="pzp-pc__progress"]') ||
+      document.querySelector('[class*="pzp-ui-progress"]')         ||
+      document.querySelector('[class*="pzp-pc__progress"]')        ||
       null
     );
   }
 
-  function setupSeekBarMarkers() {
-    const seekBar = findSeekBar();
-    if (!seekBar) return false;
+  // ── 그래프 + 마커 생성 ────────────────────────────────────────────────────────
+  function setupGraph() {
+    const progressEl = findProgressArea();
+    if (!progressEl) return false;
 
-    // 이미 세팅됐고 DOM에 연결된 경우 재사용
-    if (markerContainer && markerContainer.isConnected) return true;
+    if (graphCanvas && graphCanvas.isConnected) return true;
 
-    seekBarEl = seekBar;
-    if (getComputedStyle(seekBar).position === 'static') {
-      seekBar.style.position = 'relative';
+    if (getComputedStyle(progressEl).position === 'static') {
+      progressEl.style.position = 'relative';
     }
 
+    // 히스토그램 캔버스
+    graphCanvas = document.createElement('canvas');
+    graphCanvas.id = 'chzzk-graph-canvas';
+    graphCanvas.height = 48;
+    graphCanvas.style.cssText = `
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      width: 100%;
+      height: 48px;
+      pointer-events: none;
+      z-index: 90;
+    `;
+    progressEl.appendChild(graphCanvas);
+
+    // 스파이크 마커 컨테이너
     markerContainer = document.createElement('div');
     markerContainer.id = 'chzzk-spike-markers';
     markerContainer.style.cssText = `
@@ -235,23 +75,104 @@
       pointer-events: none;
       z-index: 99;
     `;
-    seekBar.appendChild(markerContainer);
+    progressEl.appendChild(markerContainer);
+
+    startRenderLoop();
     return true;
   }
 
-  function updateSeekBarMarkers() {
+  // ── 렌더 루프 ────────────────────────────────────────────────────────────────
+  function startRenderLoop() {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    function loop() {
+      animFrame = requestAnimationFrame(loop);
+      drawGraph();
+    }
+    loop();
+  }
+
+  // ── 히스토그램 그리기 ─────────────────────────────────────────────────────────
+  function drawGraph() {
+    if (!graphCanvas || !graphCanvas.isConnected || windows.length === 0) return;
+
+    const W = graphCanvas.clientWidth;
+    if (W === 0) return;
+    if (graphCanvas.width !== W) graphCanvas.width = W;
+    const H = graphCanvas.height;
+
+    const video       = getVideoEl();
+    const currentTime = video ? Math.floor(video.currentTime) : -1;
+    const hash        = `${windows.length}|${spikes.length}|${currentTime}`;
+    if (hash === lastDrawHash) return;
+    lastDrawHash = hash;
+
+    const ctx = graphCanvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const maxCount = Math.max(...windows.map(w => w.count), 1);
+    const spikeSet = new Set(spikes.map(s => s.windowIndex));
+    const barW     = Math.max(1, W / windows.length);
+
+    windows.forEach((w, i) => {
+      const ratio   = w.count / maxCount;
+      const barH    = Math.max(1, ratio * (H - 4));
+      const x       = i * barW;
+      const y       = H - barH;
+      const isSpike = spikeSet.has(w.windowIndex);
+
+      if (isSpike) {
+        // 스파이크: 상단 붉은빛 → 하단 흰색 gradient
+        const grad = ctx.createLinearGradient(0, y, 0, H);
+        grad.addColorStop(0, 'rgba(255, 90, 90, 0.95)');
+        grad.addColorStop(1, 'rgba(255, 200, 200, 0.6)');
+        ctx.fillStyle = grad;
+      } else {
+        // 일반: 높을수록 더 불투명한 흰색
+        const alpha = 0.12 + ratio * 0.40;
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(2)})`;
+      }
+
+      // 상단 모서리 둥글게
+      const r = Math.min(2, barW / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + barW - r - 1, y);
+      ctx.quadraticCurveTo(x + barW - 1, y, x + barW - 1, y + r);
+      ctx.lineTo(x + barW - 1, H);
+      ctx.lineTo(x, H);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // 현재 재생 위치 마커 (흰색 세로선)
+    if (currentTime >= 0 && windows[0]?.startSec != null) {
+      const maxSec = (windows[windows.length - 1].startSec || 0) + 30;
+      if (maxSec > 0) {
+        const xPos = (currentTime / maxSec) * W;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.lineWidth   = 2;
+        ctx.beginPath();
+        ctx.moveTo(xPos, 0);
+        ctx.lineTo(xPos, H);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ── 재생바 스파이크 마커 ──────────────────────────────────────────────────────
+  function updateMarkers() {
+    if (!markerContainer || !markerContainer.isConnected) return;
     if (spikes.length === 0) return;
 
-    const video = getVideoEl();
-    const duration = video ? video.duration : 0;
+    const video    = getVideoEl();
+    const duration = video?.duration;
     if (!duration || isNaN(duration)) return;
 
-    // 변경 없으면 스킵
     const hash = `${spikes.length}|${Math.floor(duration)}`;
-    if (hash === lastMarkerHash && markerContainer?.isConnected) return;
+    if (hash === lastMarkerHash) return;
     lastMarkerHash = hash;
-
-    if (!setupSeekBarMarkers()) return;
 
     markerContainer.innerHTML = '';
 
@@ -267,16 +188,14 @@
         top: -8px;
         width: 4px;
         height: 16px;
-        background: #e74c3c;
+        background: rgba(255, 90, 90, 0.9);
         transform: translateX(-50%);
         border-radius: 2px;
-        opacity: 0.9;
         cursor: pointer;
         pointer-events: all;
         z-index: 99;
       `;
 
-      // 툴팁
       const tooltip = document.createElement('div');
       tooltip.textContent = `${spike.hms}  ${spike.count}개 (${spike.ratio ?? '?'}x)`;
       tooltip.style.cssText = `
@@ -294,47 +213,18 @@
         pointer-events: none;
       `;
       marker.appendChild(tooltip);
-
       marker.addEventListener('mouseenter', () => { tooltip.style.display = 'block'; });
       marker.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
       marker.addEventListener('click', () => {
-        if (video) { video.currentTime = spike.startSec; video.play().catch(() => {}); }
+        const v = getVideoEl();
+        if (v) { v.currentTime = spike.startSec; v.play().catch(() => {}); }
       });
 
       markerContainer.appendChild(marker);
     });
   }
 
-  // ── Update spike panel ─────────────────────────────────────────────────────
-  function updatePanel() {
-    if (!panel) return;
-    if (spikes.length === 0) {
-      panel.innerHTML = '<span style="color:#666">감지된 급증 구간 없음</span>';
-      return;
-    }
-    panel.innerHTML = spikes
-      .map(
-        (s) =>
-          `<div style="margin-bottom:4px; padding:3px 0; border-bottom:1px solid #222; cursor:pointer"
-               data-sec="${s.startSec ?? ''}"
-               data-ms="${s.startMs ?? ''}">
-            <span style="color:#e74c3c">▲ ${s.hms}</span>
-            &nbsp; ${s.count}개/30s &nbsp;
-            <span style="color:#888">(평균대비 ${s.ratio ? s.ratio + 'x' : '?'} | Z=${s.zScore})</span>
-          </div>`
-      )
-      .join('');
-
-    panel.querySelectorAll('[data-sec]').forEach((el) => {
-      el.addEventListener('click', () => {
-        const sec = parseFloat(el.dataset.sec);
-        const video = getVideoEl();
-        if (video && !isNaN(sec)) video.currentTime = sec;
-      });
-    });
-  }
-
-  // ── Listen for messages from content.js ───────────────────────────────────
+  // ── 메시지 수신 ───────────────────────────────────────────────────────────────
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
     const msg = event.data;
@@ -342,47 +232,33 @@
 
     if (msg.type === 'STATS_UPDATE') {
       windows = msg.windows || [];
-      spikes = msg.spikes || [];
-      updatePanel();
-      updateSeekBarMarkers();
+      spikes  = msg.spikes  || [];
+      if (!setupGraph()) setTimeout(setupGraph, 1000);
+      updateMarkers();
     }
 
     if (msg.type === 'SPIKE_UPDATE') {
-      lastDrawHash = '';
-      lastMarkerHash = ''; // 마커도 강제 갱신
+      lastDrawHash   = '';
+      lastMarkerHash = '';
     }
   });
 
-  // ── Mount when player appears ──────────────────────────────────────────────
+  // ── 마운트 ────────────────────────────────────────────────────────────────────
   function tryMount() {
-    if (container) return; // already mounted
-    const player = findPlayerContainer();
-    if (player) {
-      createOverlay(player);
-      return;
-    }
-    // Retry
+    if (setupGraph()) return;
     setTimeout(tryMount, 1000);
   }
-
   tryMount();
 
-  // Handle SPA navigations
+  // SPA 네비게이션 대응
   let lastPath = location.pathname;
-  const navObserver = new MutationObserver(() => {
+  new MutationObserver(() => {
     if (location.pathname !== lastPath) {
       lastPath = location.pathname;
-      // Reset
-      if (container) {
-        container.remove();
-        container = null;
-        canvas = null;
-        panel = null;
-      }
-      if (animFrame) cancelAnimationFrame(animFrame);
+      if (graphCanvas)     { graphCanvas.remove();     graphCanvas = null; }
+      if (markerContainer) { markerContainer.remove(); markerContainer = null; }
+      if (animFrame)       { cancelAnimationFrame(animFrame); animFrame = null; }
       window.__chzzkOverlayActive = false;
-      navObserver.disconnect();
     }
-  });
-  navObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }).observe(document.documentElement, { childList: true, subtree: true });
 })();
