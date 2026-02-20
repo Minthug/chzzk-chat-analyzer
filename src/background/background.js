@@ -231,12 +231,54 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
+// ── 이전 세션 복원 ────────────────────────────────────────────────────────────
+async function restoreSession(pageId, pageType) {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const stored = (result[STORAGE_KEY] || {})[pageId];
+    if (!stored || !sessions[pageId]) return;
+
+    const session = sessions[pageId];
+    // 저장된 데이터가 현재 메모리보다 많을 때만 복원
+    if ((stored.windows?.length || 0) <= session.windows.length) return;
+
+    session.windows      = stored.windows      || [];
+    session.spikes       = stored.spikes       || [];
+    session.totalMessages= stored.totalMessages|| 0;
+    session.startedAt    = stored.startedAt    || session.startedAt;
+    session.pageType     = pageType            || stored.pageType || 'unknown';
+
+    // 마지막 윈도우 이후부터 이어서 수집
+    if (session.windows.length > 0) {
+      const last = session.windows[session.windows.length - 1];
+      session.currentWindowIndex    = last.windowIndex + 1;
+      session.currentWindowStartSec = last.startSec != null
+        ? (last.windowIndex + 1) * WINDOW_SIZE_SEC
+        : null;
+    }
+
+    console.log('[chzzk-analyzer] Restored session:', pageId,
+      session.windows.length, 'windows,', session.spikes.length, 'spikes');
+
+    // 복원된 데이터를 overlay에도 전달
+    notifyTabs(pageId, {
+      type: 'STATS_UPDATE',
+      windows: session.windows.slice(-50),
+      spikes: session.spikes,
+      totalMessages: session.totalMessages,
+    });
+  } catch (e) {
+    console.error('[chzzk-analyzer] Failed to restore session:', e);
+  }
+}
+
 // ── Message router ────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {
     case 'WS_OPEN':
       console.log('[chzzk-analyzer] WebSocket opened:', msg.url, 'pageType:', msg.pageType);
       getSession(msg.pageId).pageType = msg.pageType;
+      restoreSession(msg.pageId, msg.pageType); // 이전 세션 복원
       break;
 
     case 'WS_CLOSE':
