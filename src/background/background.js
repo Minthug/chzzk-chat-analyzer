@@ -223,6 +223,14 @@ async function getSettings() {
   return result;
 }
 
+// ── Service Worker Keep-Alive (MV3 슬립 방지) ────────────────────────────────
+chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 }); // 24초마다
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'keepAlive') {
+    // 서비스 워커 슬립 방지 - 아무것도 안 해도 깨어있게 됨
+  }
+});
+
 // ── Message router ────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {

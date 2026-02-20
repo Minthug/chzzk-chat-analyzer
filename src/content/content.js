@@ -209,6 +209,37 @@
     }
   }).observe(document.documentElement, { childList: true, subtree: true });
 
+  // ── 탭 가시성 변화 감지 (백그라운드 탭 대응) ─────────────────────────────
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // 탭이 숨겨짐 → WebSocket 폴백 모드 활성화 요청
+      INFO('tab hidden - switching to WebSocket fallback');
+      window.postMessage({ source: 'chzzk-analyzer-content', type: 'TAB_HIDDEN' }, '*');
+    } else {
+      // 탭이 다시 보임 → DOM Observer 재확인
+      INFO('tab visible - resuming DOM observer');
+      window.postMessage({ source: 'chzzk-analyzer-content', type: 'TAB_VISIBLE' }, '*');
+      // 컨테이너가 detach 됐을 수 있으므로 재점검
+      if (!observedContainer || !observedContainer.isConnected) {
+        tryMount();
+      }
+    }
+  });
+
+  // ── WebSocket 폴백에서 오는 채팅 수신 ────────────────────────────────────
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+    const msg = event.data;
+    if (!msg || msg.source !== 'chzzk-analyzer-ws') return;
+
+    if (msg.type === 'CHAT_MESSAGE') {
+      // 탭이 숨겨진 상태에서만 WebSocket 카운트 사용 (DOM과 중복 방지)
+      if (document.hidden) {
+        scheduleSend(msg.count || 1);
+      }
+    }
+  });
+
   // ── 시작 ─────────────────────────────────────────────────────────────────
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => setTimeout(tryMount, 500));
