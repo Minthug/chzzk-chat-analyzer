@@ -4,10 +4,18 @@
 'use strict';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const WINDOW_SIZE_SEC = 30;   // aggregation window in seconds
-const LAG_WINDOWS     = 10;   // number of past windows used for baseline
-const DEFAULT_Z_THRESH = 3.0; // Z-Score threshold for spike
-const STORAGE_KEY     = 'chzzk_analyzer_session';
+let WINDOW_SIZE_SEC  = 30;    // 팝업 설정에서 로드됨
+let Z_THRESH         = 3.0;   // 팝업 설정에서 로드됨
+const LAG_WINDOWS    = 10;
+const DEFAULT_Z_THRESH  = 3.0;
+const STORAGE_KEY    = 'chzzk_analyzer_session';
+
+// 서비스 워커 시작 시 사용자 설정 로드
+chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30 }, (s) => {
+  Z_THRESH        = s.zThreshold;
+  WINDOW_SIZE_SEC = s.windowSize;
+  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC });
+});
 
 // ── In-memory state ──────────────────────────────────────────────────────────
 // keyed by pageId
@@ -36,7 +44,7 @@ function getSession(pageId) {
 }
 
 // ── Z-Score spike detection ──────────────────────────────────────────────────
-function detectSpike(windows, zThreshold = DEFAULT_Z_THRESH) {
+function detectSpike(windows, zThreshold = Z_THRESH) {
   if (windows.length < 2) return { isSpike: false, zScore: 0, mean: 0, std: 0 };
 
   const lag = Math.min(LAG_WINDOWS, windows.length - 1);
@@ -242,20 +250,18 @@ async function restoreSession(pageId, pageType) {
     // 저장된 데이터가 현재 메모리보다 많을 때만 복원
     if ((stored.windows?.length || 0) <= session.windows.length) return;
 
-    session.windows      = stored.windows      || [];
-    session.spikes       = stored.spikes       || [];
-    session.totalMessages= stored.totalMessages|| 0;
-    session.startedAt    = stored.startedAt    || session.startedAt;
-    session.pageType     = pageType            || stored.pageType || 'unknown';
+    session.windows       = stored.windows      || [];
+    session.spikes        = stored.spikes       || [];
+    session.totalMessages = stored.totalMessages|| 0;
+    session.startedAt     = stored.startedAt    || session.startedAt;
+    session.pageType      = pageType            || stored.pageType || 'unknown';
 
-    // 마지막 윈도우 이후부터 이어서 수집
-    if (session.windows.length > 0) {
-      const last = session.windows[session.windows.length - 1];
-      session.currentWindowIndex    = last.windowIndex + 1;
-      session.currentWindowStartSec = last.startSec != null
-        ? (last.windowIndex + 1) * WINDOW_SIZE_SEC
-        : null;
-    }
+    // currentWindowIndex는 복원하지 않음
+    // → 다음 CHAT_MESSAGE에서 videoTimestamp 기준으로 자동 계산됨
+    session.currentWindowIndex    = 0;
+    session.currentWindowStartSec = null;
+    session.currentWindowStartMs  = null;
+    session.currentWindowCount    = 0;
 
     console.log('[chzzk-analyzer] Restored session:', pageId,
       session.windows.length, 'windows,', session.spikes.length, 'spikes');
@@ -329,7 +335,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     case 'SAVE_SETTINGS': {
-      chrome.storage.sync.set(msg.settings).then(() => sendResponse({ ok: true }));
+      chrome.storage.sync.set(msg.settings).then(() => {
+        // 저장 즉시 메모리에 반영
+        if (msg.settings.zThreshold)  Z_THRESH        = msg.settings.zThreshold;
+        if (msg.settings.windowSize)  WINDOW_SIZE_SEC = msg.settings.windowSize;
+        sendResponse({ ok: true });
+      });
       return true;
     }
   }
