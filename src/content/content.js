@@ -64,6 +64,15 @@
     return SELECTORS.chatItem.some((sel) => node.matches(sel));
   }
 
+  // ── 안전한 메시지 전송 헬퍼 ──────────────────────────────────────────────
+  function safeSend(msg) {
+    try {
+      chrome.runtime.sendMessage(msg);
+    } catch (_) {
+      // 확장 프로그램 재로드 시 context 무효화 → 조용히 무시
+    }
+  }
+
   // ── 메시지 전송 ───────────────────────────────────────────────────────────
   function sendChatEvent(count) {
     const pageType = getPageType();
@@ -76,7 +85,7 @@
       videoTimestamp = video ? video.currentTime : null;
     }
 
-    chrome.runtime.sendMessage({
+    safeSend({
       type: 'CHAT_MESSAGE',
       pageType,
       pageId,
@@ -128,7 +137,7 @@
     chatObserver.observe(container, { childList: true, subtree: true });
     INFO('DOM observer started on', container.className);
 
-    chrome.runtime.sendMessage({
+    safeSend({
       type: 'WS_OPEN',
       pageType: getPageType(),
       pageId: getPageId(),
@@ -199,7 +208,7 @@
       if (chatObserver) { chatObserver.disconnect(); chatObserver = null; }
       if (mountTimer) { clearTimeout(mountTimer); mountTimer = null; }
       observedContainer = null;
-      chrome.runtime.sendMessage({
+      safeSend({
         type: 'PAGE_NAVIGATE',
         pageType: getPageType(),
         pageId: getPageId(),
