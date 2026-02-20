@@ -111,42 +111,99 @@
 
     const maxCount = Math.max(...windows.map(w => w.count), 1);
     const spikeSet = new Set(spikes.map(s => s.windowIndex));
-    const barW     = Math.max(1, W / windows.length);
+    const n        = windows.length;
+    const step     = W / Math.max(n - 1, 1);
 
-    windows.forEach((w, i) => {
-      const ratio   = w.count / maxCount;
-      const barH    = Math.max(1, ratio * (H - 4));
-      const x       = i * barW;
-      const y       = H - barH;
-      const isSpike = spikeSet.has(w.windowIndex);
+    // 각 포인트의 x, y 계산
+    const pts = windows.map((w, i) => ({
+      x: i * step,
+      y: H - 4 - (w.count / maxCount) * (H - 8),
+      isSpike: spikeSet.has(w.windowIndex),
+    }));
 
-      if (isSpike) {
-        // 스파이크: 상단 붉은빛 → 하단 흰색 gradient
-        const grad = ctx.createLinearGradient(0, y, 0, H);
-        grad.addColorStop(0, 'rgba(255, 90, 90, 0.95)');
-        grad.addColorStop(1, 'rgba(255, 200, 200, 0.6)');
-        ctx.fillStyle = grad;
-      } else {
-        // 일반: 높을수록 더 불투명한 흰색
-        const alpha = 0.12 + ratio * 0.40;
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(2)})`;
-      }
+    // ── 채우기 영역 (fill) ──────────────────────────────────────────────────
+    const fillGrad = ctx.createLinearGradient(0, 0, 0, H);
+    fillGrad.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
+    fillGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
 
-      // 상단 모서리 둥글게
-      const r = Math.min(2, barW / 2);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, H);
+    ctx.lineTo(pts[0].x, pts[0].y);
+
+    // 부드러운 곡선 (Catmull-Rom 스타일)
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(i - 1, 0)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(i + 2, pts.length - 1)];
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+    }
+
+    ctx.lineTo(pts[pts.length - 1].x, H);
+    ctx.closePath();
+    ctx.fillStyle = fillGrad;
+    ctx.fill();
+
+    // ── 스파이크 구간 별도 채우기 (붉은빛) ──────────────────────────────────
+    spikes.forEach((spike) => {
+      const idx = windows.findIndex(w => w.windowIndex === spike.windowIndex);
+      if (idx < 0) return;
+      const x1 = (Math.max(idx - 1, 0)) * step;
+      const x2 = (Math.min(idx + 1, n - 1)) * step;
+
+      const spikeGrad = ctx.createLinearGradient(0, 0, 0, H);
+      spikeGrad.addColorStop(0, 'rgba(255, 80, 80, 0.7)');
+      spikeGrad.addColorStop(1, 'rgba(255, 80, 80, 0.05)');
+
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + barW - r - 1, y);
-      ctx.quadraticCurveTo(x + barW - 1, y, x + barW - 1, y + r);
-      ctx.lineTo(x + barW - 1, H);
-      ctx.lineTo(x, H);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.rect(x1, 0, x2 - x1, H);
+      ctx.clip();
+
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, H);
+      ctx.lineTo(pts[0].x, pts[0].y);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(i - 1, 0)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(i + 2, pts.length - 1)];
+        ctx.bezierCurveTo(
+          p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6,
+          p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6,
+          p2.x, p2.y
+        );
+      }
+      ctx.lineTo(pts[pts.length - 1].x, H);
       ctx.closePath();
+      ctx.fillStyle = spikeGrad;
       ctx.fill();
+      ctx.restore();
     });
 
-    // 현재 재생 위치 마커 (흰색 세로선)
+    // ── 선 그리기 ────────────────────────────────────────────────────────────
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(i - 1, 0)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(i + 2, pts.length - 1)];
+      ctx.bezierCurveTo(
+        p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6,
+        p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6,
+        p2.x, p2.y
+      );
+    }
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.lineWidth   = 1.5;
+    ctx.stroke();
+
+    // ── 현재 재생 위치 마커 ──────────────────────────────────────────────────
     if (currentTime >= 0 && windows[0]?.startSec != null) {
       const maxSec = (windows[windows.length - 1].startSec || 0) + 30;
       if (maxSec > 0) {
