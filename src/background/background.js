@@ -254,7 +254,14 @@ async function restoreSession(pageId, pageType) {
     session.totalMessages = stored.totalMessages|| 0;
     session.startedAt     = stored.startedAt    || session.startedAt;
     session.pageType      = pageType            || stored.pageType || 'unknown';
-    // session.windows는 빈 상태 유지 → 새 세션부터 깨끗하게 감지
+
+    // 윈도우 추적 상태 초기화 (서비스 워커가 살아있을 때 이전 값이 남아있으면
+    // expectedWindowIdx가 currentWindowIndex를 따라잡지 못해 윈도우가 플러시 안 됨)
+    session.windows              = [];
+    session.currentWindowIndex   = 0;
+    session.currentWindowCount   = 0;
+    session.currentWindowStartSec = null;
+    session.currentWindowStartMs  = null;
 
     console.log('[chzzk-analyzer] Restored session:', pageId,
       'spikes:', session.spikes.length, '(windows fresh for new detection)');
