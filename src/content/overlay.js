@@ -264,15 +264,16 @@
       marker.style.cssText = `
         position: absolute;
         left: ${pct}%;
-        top: 0;
-        width: 3px;
-        height: 100%;
+        top: -8px;
+        width: 4px;
+        height: 16px;
         background: #e74c3c;
         transform: translateX(-50%);
         border-radius: 2px;
         opacity: 0.9;
         cursor: pointer;
         pointer-events: all;
+        z-index: 99;
       `;
 
       // 툴팁
