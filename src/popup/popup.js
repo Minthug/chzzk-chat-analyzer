@@ -16,17 +16,22 @@ const statusBar   = document.getElementById('status-bar');
 const btnTxt      = document.getElementById('btn-export-txt');
 const btnCsv      = document.getElementById('btn-export-csv');
 const btnClear    = document.getElementById('btn-clear');
-const settingZ    = document.getElementById('setting-z');
-const settingWin  = document.getElementById('setting-window');
-const btnSave     = document.getElementById('btn-save-settings');
+const settingZ         = document.getElementById('setting-z');
+const settingWin       = document.getElementById('setting-window');
+const settingThumbnail = document.getElementById('setting-thumbnail');
+const btnSave          = document.getElementById('btn-save-settings');
+const btnClearThumbs   = document.getElementById('btn-clear-thumbnails');
+const storageBarFill   = document.getElementById('storage-bar-fill');
+const storageText      = document.getElementById('storage-text');
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   // Load settings
   const res = await bgMessage({ type: 'GET_SETTINGS' });
   if (res?.settings) {
-    settingZ.value   = res.settings.zThreshold ?? 3.0;
-    settingWin.value = res.settings.windowSize  ?? 30;
+    settingZ.value             = res.settings.zThreshold  ?? 3.0;
+    settingWin.value           = res.settings.windowSize  ?? 30;
+    settingThumbnail.checked   = res.settings.saveThumbnail ?? true;
   }
 
   // Find active chzzk tab
@@ -56,6 +61,22 @@ async function refreshData() {
   const res = await bgMessage({ type: 'GET_SESSION_DATA', pageId: currentPageId });
   currentSession = res?.data || null;
   renderSession(currentSession);
+  updateStorageBar();
+}
+
+// ── 스토리지 사용량 표시 ──────────────────────────────────────────────────────
+async function updateStorageBar() {
+  try {
+    const MAX = 10 * 1024 * 1024; // 10MB
+    const used = await chrome.storage.local.getBytesInUse(null);
+    const pct  = Math.min(100, (used / MAX) * 100);
+    const mb   = (used / 1024 / 1024).toFixed(1);
+
+    storageBarFill.style.width = `${pct}%`;
+    storageBarFill.style.backgroundColor =
+      pct > 80 ? '#e74c3c' : pct > 60 ? '#e67e22' : '#27ae60';
+    storageText.textContent = `${mb} MB / 10 MB (${Math.round(pct)}%)`;
+  } catch (_) {}
 }
 
 // ── Render session ────────────────────────────────────────────────────────────
@@ -187,8 +208,18 @@ btnSave.addEventListener('click', async () => {
   const z = parseFloat(settingZ.value);
   const w = parseInt(settingWin.value, 10);
   if (isNaN(z) || isNaN(w)) return;
-  await bgMessage({ type: 'SAVE_SETTINGS', settings: { zThreshold: z, windowSize: w } });
+  await bgMessage({
+    type: 'SAVE_SETTINGS',
+    settings: { zThreshold: z, windowSize: w, saveThumbnail: settingThumbnail.checked },
+  });
   setStatus('설정 저장됨');
+});
+
+btnClearThumbs.addEventListener('click', async () => {
+  const res = await bgMessage({ type: 'CLEAR_THUMBNAILS' });
+  setStatus(`📷 썸네일 ${res?.removed ?? 0}개 삭제 완료`);
+  updateStorageBar();
+  await refreshData();
 });
 
 // ── 영상 시점 이동 ────────────────────────────────────────────────────────────

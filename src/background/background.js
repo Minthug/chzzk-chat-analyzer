@@ -6,15 +6,17 @@
 // ── Constants ────────────────────────────────────────────────────────────────
 let WINDOW_SIZE_SEC  = 30;    // 팝업 설정에서 로드됨
 let Z_THRESH         = 3.0;   // 팝업 설정에서 로드됨
+let SAVE_THUMBNAIL   = true;  // 썸네일 자동 캡처 여부
 const LAG_WINDOWS    = 10;
 const DEFAULT_Z_THRESH  = 3.0;
 const STORAGE_KEY    = 'chzzk_analyzer_session';
 
 // 서비스 워커 시작 시 사용자 설정 로드
-chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30 }, (s) => {
+chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true }, (s) => {
   Z_THRESH        = s.zThreshold;
   WINDOW_SIZE_SEC = s.windowSize;
-  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC });
+  SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
+  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL });
 });
 
 // ── In-memory state ──────────────────────────────────────────────────────────
@@ -250,6 +252,7 @@ async function getSettings() {
   const result = await chrome.storage.sync.get({
     zThreshold: DEFAULT_Z_THRESH,
     windowSize: WINDOW_SIZE_SEC,
+    saveThumbnail: true,
   });
   return result;
 }
@@ -399,6 +402,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
     }
 
+    case 'CLEAR_THUMBNAILS': {
+      chrome.storage.local.get(STORAGE_KEY).then(async (result) => {
+        const existing = result[STORAGE_KEY] || {};
+        let removed = 0;
+        for (const pageId of Object.keys(existing)) {
+          for (const spike of existing[pageId].spikes || []) {
+            if (spike.thumbnail) { delete spike.thumbnail; removed++; }
+          }
+        }
+        // 메모리 세션도 정리
+        for (const pageId of Object.keys(sessions)) {
+          for (const spike of sessions[pageId].spikes || []) {
+            delete spike.thumbnail;
+          }
+        }
+        await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+        sendResponse({ ok: true, removed });
+      });
+      return true;
+    }
+
     case 'GET_SETTINGS': {
       getSettings().then((settings) => sendResponse({ settings }));
       return true;
@@ -407,8 +431,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'SAVE_SETTINGS': {
       chrome.storage.sync.set(msg.settings).then(() => {
         // 저장 즉시 메모리에 반영
-        if (msg.settings.zThreshold)  Z_THRESH        = msg.settings.zThreshold;
-        if (msg.settings.windowSize)  WINDOW_SIZE_SEC = msg.settings.windowSize;
+        if (msg.settings.zThreshold  \!== undefined) Z_THRESH        = msg.settings.zThreshold;
+        if (msg.settings.windowSize  \!== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
+        if (msg.settings.saveThumbnail \!== undefined) SAVE_THUMBNAIL = msg.settings.saveThumbnail;
         sendResponse({ ok: true });
       });
       return true;

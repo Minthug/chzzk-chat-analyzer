@@ -172,6 +172,36 @@
     }
     .btn-save:hover { background: #666; }
 
+    .storage-bar-wrap { margin-bottom: 6px; }
+    .storage-bar-bg {
+      width: 100%; height: 5px;
+      background: #1a1a2e;
+      border-radius: 3px; overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .storage-bar-fill {
+      height: 100%; width: 0%;
+      border-radius: 3px;
+      transition: width 0.4s, background-color 0.4s;
+      background: #27ae60;
+    }
+    .storage-text { font-size: 10px; color: #888; }
+    .btn-thumb-clear {
+      display: block; width: 100%; margin-top: 8px; padding: 5px;
+      background: #2a2a3e; color: #888;
+      border: 1px solid #333; border-radius: 4px;
+      font-size: 11px; cursor: pointer; text-align: center;
+    }
+    .btn-thumb-clear:hover { background: #333; color: #bbb; }
+    .setting-toggle {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 14px 8px; cursor: pointer;
+      font-size: 11px; color: #aaa;
+    }
+    .setting-toggle input[type='checkbox'] {
+      cursor: pointer; accent-color: #3498db;
+    }
+
     .status-bar {
       padding: 4px 14px 8px;
       font-size: 10px;
@@ -220,6 +250,18 @@
     <button class="btn btn-clear" id="btn-clear">초기화</button>
   </div>
 
+  <!-- Storage -->
+  <div class="section">
+    <div class="section-title">스토리지</div>
+    <div class="storage-bar-wrap">
+      <div class="storage-bar-bg">
+        <div class="storage-bar-fill" id="storage-bar-fill"></div>
+      </div>
+      <span class="storage-text" id="storage-text">계산 중...</span>
+    </div>
+    <button class="btn-thumb-clear" id="btn-clear-thumbnails">📷 썸네일만 삭제</button>
+  </div>
+
   <!-- Settings -->
   <div class="section">
     <div class="section-title">설정</div>
@@ -233,6 +275,10 @@
         <input type="number" id="setting-window" min="10" max="300" step="10" value="30" />
       </div>
     </div>
+    <label class="setting-toggle">
+      <input type="checkbox" id="setting-thumbnail" checked />
+      썸네일 자동 캡처
+    </label>
     <button class="btn-save" id="btn-save-settings">설정 저장</button>
   </div>
 
