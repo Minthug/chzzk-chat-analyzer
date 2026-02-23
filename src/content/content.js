@@ -78,6 +78,58 @@
     return SELECTORS.chatItem.some((sel) => node.matches(sel));
   }
 
+  // ── 급증 구간 단축키 (J: 이전, K: 다음) ──────────────────────────────────
+  let currentSpikes = [];
+  let toastTimer    = null;
+  let toastEl       = null;
+
+  function showToast(text) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.style.cssText = [
+        'position:fixed', 'top:72px', 'left:50%', 'transform:translateX(-50%)',
+        'background:rgba(0,0,0,0.82)', 'color:#fff', 'font-size:13px',
+        'padding:8px 18px', 'border-radius:8px', 'z-index:2147483647',
+        'pointer-events:none', 'transition:opacity 0.25s', 'white-space:nowrap',
+        'font-family:system-ui,sans-serif', 'letter-spacing:0.2px',
+      ].join(';');
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = text;
+    toastEl.style.opacity = '1';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.style.opacity = '0'; }, 2200);
+  }
+
+  function jumpToSpike(spike) {
+    const video = getVideoEl();
+    if (!video || spike.startSec == null) return;
+    video.currentTime = spike.startSec;
+    video.play().catch(() => {});
+    showToast(`▶ ${spike.hms}  ${spike.count}개/30s  Z=${spike.zScore}`);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    // 입력 필드에서는 무시
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (document.activeElement?.isContentEditable) return;
+
+    const vodSpikes = currentSpikes.filter(s => s.startSec != null);
+    if (vodSpikes.length === 0) return;
+
+    const video = getVideoEl();
+    const now   = video ? video.currentTime : 0;
+
+    if (e.key === 'k' || e.key === 'K') {
+      const next = vodSpikes.find(s => s.startSec > now + 1);
+      next ? jumpToSpike(next) : showToast('마지막 급증 구간입니다');
+    } else if (e.key === 'j' || e.key === 'J') {
+      const prev = [...vodSpikes].reverse().find(s => s.startSec < now - 1);
+      prev ? jumpToSpike(prev) : showToast('첫 번째 급증 구간입니다');
+    }
+  }, true);
+
   // ── 안전한 메시지 전송 헬퍼 ──────────────────────────────────────────────
   function safeSend(msg) {
     try {
@@ -201,6 +253,10 @@
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'SPIKE_UPDATE' || msg.type === 'STATS_UPDATE') {
       window.postMessage({ source: 'chzzk-analyzer-bg', ...msg }, '*');
+    }
+
+    if (msg.type === 'STATS_UPDATE') {
+      currentSpikes = msg.spikes || [];
     }
 
     if (msg.type === 'SPIKE_UPDATE') {
