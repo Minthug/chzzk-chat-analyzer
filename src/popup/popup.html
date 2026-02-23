@@ -63,14 +63,14 @@
     .stat-label { font-size: 10px; color: #888; margin-top: 2px; }
 
     .spike-list {
-      max-height: 160px;
+      max-height: 280px;
       overflow-y: auto;
     }
     .spike-item {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 5px 4px;
+      padding: 6px 4px;
       border-bottom: 1px solid #1a1a2e;
       cursor: pointer;
       border-radius: 4px;
@@ -78,9 +78,36 @@
     }
     .spike-item:hover { background: #1e2a3a; }
     .spike-item:active { background: #243040; }
-    .spike-time { color: #e74c3c; font-weight: 600; min-width: 64px; }
+    .spike-thumb {
+      width: 80px;
+      height: 45px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+      background: #111;
+    }
+    .spike-thumb-empty {
+      width: 80px;
+      height: 45px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      background: #1a1a2e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: #444;
+    }
+    .spike-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+    .spike-time { color: #e74c3c; font-weight: 600; font-size: 12px; }
     .spike-count { color: #aaa; font-size: 11px; }
-    .spike-ratio { margin-left: auto; color: #e67e22; font-size: 11px; }
+    .spike-ratio { color: #e67e22; font-size: 11px; }
 
     .empty-msg {
       color: #555;

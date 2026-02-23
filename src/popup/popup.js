@@ -99,9 +99,15 @@ function renderSession(session) {
     .map(
       (s, i) => `
       <div class="spike-item" data-index="${i}" data-sec="${s.startSec ?? ''}" title="클릭하면 해당 시점으로 이동">
-        <span class="spike-time">▶ ${s.hms}</span>
-        <span class="spike-count">${s.count}개/30s</span>
-        <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
+        ${s.thumbnail
+          ? `<img class="spike-thumb" src="${s.thumbnail}" alt="미리보기" />`
+          : `<div class="spike-thumb-empty">📷</div>`
+        }
+        <div class="spike-info">
+          <span class="spike-time">▶ ${s.hms}</span>
+          <span class="spike-count">${s.count}개/30s</span>
+          <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
+        </div>
       </div>`
     )
     .join('');

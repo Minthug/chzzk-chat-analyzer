@@ -329,6 +329,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
     }
 
+    case 'SPIKE_THUMBNAIL': {
+      const session = sessions[msg.pageId];
+      if (session) {
+        const spike = session.spikes.find(s => s.windowIndex === msg.windowIndex);
+        if (spike) {
+          spike.thumbnail = msg.thumbnail;
+          persistSession(session);
+        }
+      }
+      break;
+    }
+
     case 'GET_SETTINGS': {
       getSettings().then((settings) => sendResponse({ settings }));
       return true;

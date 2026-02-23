@@ -197,10 +197,37 @@
     (document.head || document.documentElement).appendChild(script);
   }
 
+  // ── 비디오 프레임 썸네일 캡처 ────────────────────────────────────────────
+  function captureThumbnail() {
+    try {
+      const video = getVideoEl();
+      if (!video || video.readyState < 2) return null;
+      const canvas = document.createElement('canvas');
+      canvas.width  = 160;
+      canvas.height = 90;
+      canvas.getContext('2d').drawImage(video, 0, 0, 160, 90);
+      return canvas.toDataURL('image/jpeg', 0.5);
+    } catch (_) {
+      return null; // CORS 제한 등으로 캡처 불가 시 무시
+    }
+  }
+
   // ── background / popup 메시지 처리 ───────────────────────────────────────
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'SPIKE_UPDATE' || msg.type === 'STATS_UPDATE') {
       window.postMessage({ source: 'chzzk-analyzer-bg', ...msg }, '*');
+    }
+
+    if (msg.type === 'SPIKE_UPDATE') {
+      const thumbnail = captureThumbnail();
+      if (thumbnail) {
+        safeSend({
+          type: 'SPIKE_THUMBNAIL',
+          pageId: getPageId(),
+          windowIndex: msg.spike.windowIndex,
+          thumbnail,
+        });
+      }
     }
 
     if (msg.type === 'SEEK_TO') {
