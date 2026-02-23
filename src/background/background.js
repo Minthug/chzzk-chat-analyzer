@@ -199,6 +199,19 @@ function handleChatMessage(msg) {
   persistSession(session);
 }
 
+// ── 썸네일 제거 (용량 부족 시 스파이크 데이터는 보존) ──────────────────────────
+function stripThumbnails(stored) {
+  let removed = 0;
+  for (const pageId of Object.keys(stored)) {
+    const s = stored[pageId];
+    if (!s.spikes) continue;
+    for (const spike of s.spikes) {
+      if (spike.thumbnail) { delete spike.thumbnail; removed++; }
+    }
+  }
+  console.log(`[chzzk-analyzer] Storage full: ${removed}개 썸네일 제거 (스파이크 데이터는 유지)`);
+}
+
 // ── Persist session to chrome.storage.local (브라우저 재시작 후에도 유지) ──────
 let persistTimer = null;
 function persistSession(session) {
@@ -215,7 +228,17 @@ function persistSession(session) {
         spikes: session.spikes,
         totalMessages: session.totalMessages,
       };
-      await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+      try {
+        await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+      } catch (e) {
+        if (e.message?.includes('QUOTA_BYTES')) {
+          // 용량 초과 → 모든 세션에서 썸네일 제거 후 재시도
+          stripThumbnails(existing);
+          await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+        } else {
+          throw e;
+        }
+      }
     } catch (e) {
       console.error('[chzzk-analyzer] Storage error:', e);
     }
