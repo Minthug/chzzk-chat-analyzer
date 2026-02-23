@@ -431,9 +431,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'SAVE_SETTINGS': {
       chrome.storage.sync.set(msg.settings).then(() => {
         // 저장 즉시 메모리에 반영
-        if (msg.settings.zThreshold  \!== undefined) Z_THRESH        = msg.settings.zThreshold;
-        if (msg.settings.windowSize  \!== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
-        if (msg.settings.saveThumbnail \!== undefined) SAVE_THUMBNAIL = msg.settings.saveThumbnail;
+        if (msg.settings.zThreshold   !== undefined) Z_THRESH        = msg.settings.zThreshold;
+        if (msg.settings.windowSize   !== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
+        if (msg.settings.saveThumbnail !== undefined) SAVE_THUMBNAIL = msg.settings.saveThumbnail;
         sendResponse({ ok: true });
       });
       return true;
