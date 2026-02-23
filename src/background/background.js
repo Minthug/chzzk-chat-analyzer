@@ -369,8 +369,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               persistSession(session);
             }
           }
-        } catch (e) {
-          console.error('[chzzk-analyzer] Tab capture failed:', e);
+        } catch (_) {
+          // 탭 비활성화 등 캡처 불가 시 조용히 무시
         }
       })();
       break;
