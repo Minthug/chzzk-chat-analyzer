@@ -121,10 +121,10 @@
     const video = getVideoEl();
     const now   = video ? video.currentTime : 0;
 
-    if (e.key === 'k' || e.key === 'K') {
+    if (e.key === '+' || e.key === '=') {
       const next = vodSpikes.find(s => s.startSec > now + 1);
       next ? jumpToSpike(next) : showToast('마지막 급증 구간입니다');
-    } else if (e.key === 'j' || e.key === 'J') {
+    } else if (e.key === '-' || e.key === '_') {
       const prev = [...vodSpikes].reverse().find(s => s.startSec < now - 1);
       prev ? jumpToSpike(prev) : showToast('첫 번째 급증 구간입니다');
     }
