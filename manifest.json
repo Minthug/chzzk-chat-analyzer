@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "치지직 채팅 분석기",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "치지직 VOD/라이브 채팅 급증 구간을 자동 감지해 편집 포인트를 찾아주는 확장 프로그램",
 
   "permissions": [
