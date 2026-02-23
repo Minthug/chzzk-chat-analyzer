@@ -12,7 +12,8 @@
   ],
 
   "host_permissions": [
-    "*://*.chzzk.naver.com/*"
+    "*://*.chzzk.naver.com/*",
+    "<all_urls>"
   ],
 
   "background": {
