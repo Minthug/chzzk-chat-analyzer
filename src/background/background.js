@@ -329,15 +329,50 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
     }
 
-    case 'SPIKE_THUMBNAIL': {
-      const session = sessions[msg.pageId];
-      if (session) {
-        const spike = session.spikes.find(s => s.windowIndex === msg.windowIndex);
-        if (spike) {
-          spike.thumbnail = msg.thumbnail;
-          persistSession(session);
+    case 'CAPTURE_REQUEST': {
+      // canvas.toDataURL()이 CDN CORS로 막히므로
+      // captureVisibleTab으로 탭 전체 캡처 → OffscreenCanvas로 비디오 영역 crop
+      if (!sender.tab?.active) break; // 탭이 숨겨진 경우 스킵
+      (async () => {
+        try {
+          const dataUrl = await chrome.tabs.captureVisibleTab(sender.tab.windowId, {
+            format: 'jpeg',
+            quality: 70,
+          });
+
+          const { rect, dpr = 1, pageId, windowIndex } = msg;
+          const blob = await (await fetch(dataUrl)).blob();
+          const img  = await createImageBitmap(blob);
+
+          const canvas = new OffscreenCanvas(160, 90);
+          canvas.getContext('2d').drawImage(
+            img,
+            Math.round(rect.x * dpr), Math.round(rect.y * dpr),
+            Math.round(rect.width * dpr), Math.round(rect.height * dpr),
+            0, 0, 160, 90
+          );
+
+          const thumbBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.6 });
+          const buf   = await thumbBlob.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary  = '';
+          for (let i = 0; i < bytes.length; i += 8192) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+          }
+          const thumbnail = `data:image/jpeg;base64,${btoa(binary)}`;
+
+          const session = sessions[pageId];
+          if (session) {
+            const spike = session.spikes.find(s => s.windowIndex === windowIndex);
+            if (spike) {
+              spike.thumbnail = thumbnail;
+              persistSession(session);
+            }
+          }
+        } catch (e) {
+          console.error('[chzzk-analyzer] Tab capture failed:', e);
         }
-      }
+      })();
       break;
     }
 

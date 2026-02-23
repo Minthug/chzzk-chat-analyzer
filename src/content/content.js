@@ -197,21 +197,6 @@
     (document.head || document.documentElement).appendChild(script);
   }
 
-  // ── 비디오 프레임 썸네일 캡처 ────────────────────────────────────────────
-  function captureThumbnail() {
-    try {
-      const video = getVideoEl();
-      if (!video || video.readyState < 2) return null;
-      const canvas = document.createElement('canvas');
-      canvas.width  = 160;
-      canvas.height = 90;
-      canvas.getContext('2d').drawImage(video, 0, 0, 160, 90);
-      return canvas.toDataURL('image/jpeg', 0.5);
-    } catch (_) {
-      return null; // CORS 제한 등으로 캡처 불가 시 무시
-    }
-  }
-
   // ── background / popup 메시지 처리 ───────────────────────────────────────
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'SPIKE_UPDATE' || msg.type === 'STATS_UPDATE') {
@@ -219,13 +204,17 @@
     }
 
     if (msg.type === 'SPIKE_UPDATE') {
-      const thumbnail = captureThumbnail();
-      if (thumbnail) {
+      // canvas.toDataURL()은 CDN 영상 CORS로 막힘 →
+      // 비디오 영역 위치만 background에 전달, captureVisibleTab으로 캡처
+      const video = getVideoEl();
+      if (video) {
+        const rect = video.getBoundingClientRect();
         safeSend({
-          type: 'SPIKE_THUMBNAIL',
+          type: 'CAPTURE_REQUEST',
           pageId: getPageId(),
           windowIndex: msg.spike.windowIndex,
-          thumbnail,
+          rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+          dpr: window.devicePixelRatio || 1,
         });
       }
     }
