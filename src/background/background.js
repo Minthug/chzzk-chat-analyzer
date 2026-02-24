@@ -352,6 +352,7 @@ async function getSettings() {
     zThreshold: DEFAULT_Z_THRESH,
     windowSize: WINDOW_SIZE_SEC,
     saveThumbnail: true,
+    keywords: [],
   });
   return result;
 }
