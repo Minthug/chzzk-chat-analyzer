@@ -17,12 +17,13 @@
       '[class*="vod_chatting_content"]',
     ],
     liveChatList: [
+      '[class*="live_chatting_list_wrapper"]',
       '[class*="live_chatting_list"]',
       '[class*="live_chatting_content"]',
     ],
     chatItem: [
+      '[class*="live_chatting_list_item"]',
       '[class*="vod_chatting_item"]',
-      '[class*="live_chatting_item"]',
       '[class*="chatting_item"]',
     ],
   };
@@ -30,6 +31,7 @@
   // ── 채팅 텍스트 추출 ─────────────────────────────────────────────────────
   function extractChatText(node) {
     const msgSelectors = [
+      '[class*="live_chatting_message_text"]',
       '[class*="message_text"]',
       '[class*="chatting_message"]',
       '[class*="chat_message"]',
