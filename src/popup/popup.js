@@ -116,6 +116,15 @@ function renderSession(session) {
     return;
   }
 
+  // Z-Score 상위 3개 인덱스 추출
+  const top3 = new Set(
+    [...session.spikes]
+      .map((s, i) => ({ i, z: s.zScore }))
+      .sort((a, b) => b.z - a.z)
+      .slice(0, 3)
+      .map(x => x.i)
+  );
+
   spikeList.innerHTML = session.spikes
     .map(
       (s, i) => `
@@ -125,7 +134,7 @@ function renderSession(session) {
           : `<div class="spike-thumb-empty">📷</div>`
         }
         <div class="spike-info">
-          <span class="spike-time">▶ ${s.hms}</span>
+          <span class="spike-time">▶ ${s.hms}${top3.has(i) ? ' <span class="spike-star">★</span>' : ''}</span>
           <span class="spike-count">${s.count}개/30s</span>
           <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
         </div>
