@@ -133,16 +133,23 @@ function renderSession(session) {
     return;
   }
 
-  // Z-Score 상위 3개 인덱스 추출
+  // 시간순 정렬 (원본 배열 보존)
+  const sortedSpikes = [...session.spikes].sort((a, b) => {
+    const aTime = a.startSec ?? a.startMs ?? 0;
+    const bTime = b.startSec ?? b.startMs ?? 0;
+    return aTime - bTime;
+  });
+
+  // Z-Score 상위 3개 인덱스 추출 (정렬 후 기준)
   const top3 = new Set(
-    [...session.spikes]
+    [...sortedSpikes]
       .map((s, i) => ({ i, z: s.zScore }))
       .sort((a, b) => b.z - a.z)
       .slice(0, 3)
       .map(x => x.i)
   );
 
-  spikeList.innerHTML = session.spikes
+  spikeList.innerHTML = sortedSpikes
     .map(
       (s, i) => `
       <div class="spike-item" data-index="${i}" data-sec="${s.startSec ?? ''}" title="클릭하면 해당 시점으로 이동">
@@ -372,15 +379,23 @@ function renderKeywordSpikes(session) {
     return;
   }
 
+  // 시간순 정렬 (원본 배열 보존)
+  const sortedKSpikes = [...kSpikes].sort((a, b) => {
+    const aTime = a.startSec ?? a.startMs ?? 0;
+    const bTime = b.startSec ?? b.startMs ?? 0;
+    return aTime - bTime;
+  });
+
+  // Z-Score 상위 3개 인덱스 추출 (정렬 후 기준)
   const top3 = new Set(
-    [...kSpikes]
+    [...sortedKSpikes]
       .map((s, i) => ({ i, z: s.zScore }))
       .sort((a, b) => b.z - a.z)
       .slice(0, 3)
       .map(x => x.i)
   );
 
-  spikeList.innerHTML = kSpikes
+  spikeList.innerHTML = sortedKSpikes
     .map((s, i) => `
       <div class="spike-item" data-index="${i}" data-sec="${s.startSec ?? ''}" title="클릭하면 해당 시점으로 이동">
         <div class="keyword-badge">${s.keyword}</div>
