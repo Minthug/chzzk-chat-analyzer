@@ -298,7 +298,7 @@ btnAddKeyword.addEventListener('click', () => {
 });
 
 settingKeywordInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
+  if (e.key === 'Enter' && !e.isComposing) {
     addKeyword(settingKeywordInput.value);
     settingKeywordInput.value = '';
   }
