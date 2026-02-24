@@ -301,12 +301,17 @@ function renderKeywordTags() {
   });
 }
 
+function isKoreanJamo(char) {
+  const code = char.charCodeAt(0);
+  return code >= 0x3130 && code <= 0x318F; // ㄱ~ㅣ 범위
+}
+
 function addKeyword(kw) {
   kw = kw.trim();
   if (!kw) return;
-  if (kw.length < 2) {
+  if (kw.length === 1 && isKoreanJamo(kw)) {
     settingKeywordInput.value = '';
-    settingKeywordInput.placeholder = '2글자 이상 입력해주세요';
+    settingKeywordInput.placeholder = 'ㅋ, ㅎ 등 단독 자음/모음은 등록 불가';
     setTimeout(() => { settingKeywordInput.placeholder = '키워드 입력 후 Enter 또는 추가'; }, 2000);
     return;
   }
