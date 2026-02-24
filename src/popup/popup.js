@@ -161,10 +161,13 @@ function renderSession(session) {
           <span class="spike-time">▶ ${s.hms}${top3.has(i) ? ' <span class="spike-star">★</span>' : ''}</span>
           <span class="spike-count">${s.count}개/30s</span>
           <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
-          <input class="spike-memo" type="text" placeholder="메모 추가..."
-            value="${(s.memo || '').replace(/"/g, '&quot;')}"
-            data-window-index="${s.windowIndex}"
-            data-is-keyword="false" />
+          <div class="spike-memo-wrap${s.memo ? ' has-memo' : ''}">
+            <span class="spike-memo-icon">✏</span>
+            <input class="spike-memo" type="text" placeholder="메모 추가..."
+              value="${(s.memo || '').replace(/"/g, '&quot;')}"
+              data-window-index="${s.windowIndex}"
+              data-is-keyword="false" />
+          </div>
         </div>
       </div>`
     )
@@ -173,7 +176,7 @@ function renderSession(session) {
   // 클릭 시 영상 해당 시점으로 이동 (메모 입력 클릭은 무시)
   spikeList.querySelectorAll('.spike-item[data-sec]').forEach((el) => {
     el.addEventListener('click', (e) => {
-      if (e.target.classList.contains('spike-memo')) return;
+      if (e.target.closest('.spike-memo-wrap')) return;
       const sec = parseFloat(el.dataset.sec);
       if (isNaN(sec)) return;
       seekToTime(sec);
@@ -281,6 +284,11 @@ let memoSaveTimer = null;
 spikeList.addEventListener('input', (e) => {
   const input = e.target;
   if (!input.classList.contains('spike-memo')) return;
+
+  // has-memo 클래스 실시간 토글
+  const wrap = input.closest('.spike-memo-wrap');
+  if (wrap) wrap.classList.toggle('has-memo', input.value.length > 0);
+
   clearTimeout(memoSaveTimer);
   memoSaveTimer = setTimeout(async () => {
     if (!currentPageId) return;
@@ -403,18 +411,21 @@ function renderKeywordSpikes(session) {
           <span class="spike-time">▶ ${s.hms}${top3.has(i) ? ' <span class="spike-star">★</span>' : ''}</span>
           <span class="spike-count">${s.count}회/30s</span>
           <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
-          <input class="spike-memo" type="text" placeholder="메모 추가..."
-            value="${(s.memo || '').replace(/"/g, '&quot;')}"
-            data-window-index="${s.windowIndex}"
-            data-is-keyword="true"
-            data-keyword="${s.keyword}" />
+          <div class="spike-memo-wrap${s.memo ? ' has-memo' : ''}">
+            <span class="spike-memo-icon">✏</span>
+            <input class="spike-memo" type="text" placeholder="메모 추가..."
+              value="${(s.memo || '').replace(/"/g, '&quot;')}"
+              data-window-index="${s.windowIndex}"
+              data-is-keyword="true"
+              data-keyword="${s.keyword}" />
+          </div>
         </div>
       </div>`)
     .join('');
 
   spikeList.querySelectorAll('.spike-item[data-sec]').forEach(el => {
     el.addEventListener('click', (e) => {
-      if (e.target.classList.contains('spike-memo')) return;
+      if (e.target.closest('.spike-memo-wrap')) return;
       const sec = parseFloat(el.dataset.sec);
       if (!isNaN(sec)) seekToTime(sec);
     });
