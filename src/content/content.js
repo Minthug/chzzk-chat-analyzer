@@ -27,6 +27,20 @@
     ],
   };
 
+  // ── 채팅 텍스트 추출 ─────────────────────────────────────────────────────
+  function extractChatText(node) {
+    const msgSelectors = [
+      '[class*="message_text"]',
+      '[class*="chatting_message"]',
+      '[class*="chat_message"]',
+    ];
+    for (const sel of msgSelectors) {
+      const el = node.querySelector(sel);
+      if (el) return el.textContent.trim();
+    }
+    return node.textContent.trim();
+  }
+
   // ── 페이지 타입 ───────────────────────────────────────────────────────────
   function getPageType() {
     const path = window.location.pathname;
@@ -140,7 +154,7 @@
   }
 
   // ── 메시지 전송 ───────────────────────────────────────────────────────────
-  function sendChatEvent(count) {
+  function sendChatEvent(count, texts = []) {
     const pageType = getPageType();
     const pageId = getPageId();
     if (!pageId) return;
@@ -156,6 +170,7 @@
       pageType,
       pageId,
       count,
+      texts,
       videoTimestamp,
       wallTimestamp: Date.now(),
     });
@@ -165,16 +180,18 @@
   let chatObserver = null;
   let observedContainer = null;
   let pendingCount = 0;
+  let pendingTexts = [];
   let flushTimer = null;
 
-  function scheduleSend(count) {
+  function scheduleSend(count, texts = []) {
     pendingCount += count;
+    pendingTexts.push(...texts);
     LOG('chat detected, pending:', pendingCount);
     if (flushTimer) return;
     flushTimer = setTimeout(() => {
       flushTimer = null;
       if (pendingCount > 0) {
-        sendChatEvent(pendingCount);
+        sendChatEvent(pendingCount, pendingTexts.splice(0));
         pendingCount = 0;
       }
     }, 200);
@@ -186,18 +203,20 @@
 
     chatObserver = new MutationObserver((mutations) => {
       let newChats = 0;
+      const texts = [];
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (isChatItem(node)) {
             newChats++;
+            texts.push(extractChatText(node));
           } else if (node.nodeType === 1) {
-            newChats += node.querySelectorAll(
-              SELECTORS.chatItem.join(',')
-            ).length;
+            const items = node.querySelectorAll(SELECTORS.chatItem.join(','));
+            newChats += items.length;
+            items.forEach(item => texts.push(extractChatText(item)));
           }
         }
       }
-      if (newChats > 0) scheduleSend(newChats);
+      if (newChats > 0) scheduleSend(newChats, texts);
     });
 
     chatObserver.observe(container, { childList: true, subtree: true });

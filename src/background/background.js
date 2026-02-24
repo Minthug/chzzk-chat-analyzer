@@ -7,16 +7,18 @@
 let WINDOW_SIZE_SEC  = 30;    // 팝업 설정에서 로드됨
 let Z_THRESH         = 3.0;   // 팝업 설정에서 로드됨
 let SAVE_THUMBNAIL   = true;  // 썸네일 자동 캡처 여부
+let KEYWORDS         = [];    // 키워드 감지 목록
 const LAG_WINDOWS    = 10;
 const DEFAULT_Z_THRESH  = 3.0;
 const STORAGE_KEY    = 'chzzk_analyzer_session';
 
 // 서비스 워커 시작 시 사용자 설정 로드
-chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true }, (s) => {
+chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, keywords: [] }, (s) => {
   Z_THRESH        = s.zThreshold;
   WINDOW_SIZE_SEC = s.windowSize;
   SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
-  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL });
+  KEYWORDS        = s.keywords || [];
+  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, KEYWORDS });
 });
 
 // ── In-memory state ──────────────────────────────────────────────────────────
@@ -40,6 +42,9 @@ function getSession(pageId) {
       spikes: [],
       totalMessages: 0,
       channelName: null,
+      // Keyword spikes
+      keywordSpikes: [],
+      keywordState: {},  // { [keyword]: { currentCount, currentWindowIndex, currentWindowStartSec, currentWindowStartMs, windows[] } }
     };
   }
   return sessions[pageId];
@@ -131,6 +136,7 @@ function flushWindow(session) {
     type: 'STATS_UPDATE',
     windows: session.windows.slice(-50), // last 50 windows
     spikes: session.spikes,
+    keywordSpikes: session.keywordSpikes,
     totalMessages: session.totalMessages,
   });
 
@@ -154,6 +160,95 @@ async function notifyTabs(pageId, message) {
       chrome.tabs.sendMessage(tab.id, message).catch(() => {});
     }
   } catch (_) {}
+}
+
+// ── 키워드 상태 초기화 ────────────────────────────────────────────────────────
+function initKeywordState(session, keyword) {
+  if (!session.keywordState[keyword]) {
+    session.keywordState[keyword] = {
+      currentCount:          0,
+      currentWindowIndex:    0,
+      currentWindowStartSec: null,
+      currentWindowStartMs:  null,
+      windows:               [],
+    };
+  }
+  return session.keywordState[keyword];
+}
+
+// ── 키워드 윈도우 플러시 ──────────────────────────────────────────────────────
+function flushKeywordWindow(session, keyword) {
+  const ks = session.keywordState[keyword];
+  if (!ks) return;
+
+  if (ks.currentCount === 0) {
+    ks.currentWindowIndex++;
+    return;
+  }
+
+  const windowEntry = {
+    windowIndex: ks.currentWindowIndex,
+    startSec: session.pageType === 'vod'  ? ks.currentWindowStartSec : null,
+    startMs:  session.pageType === 'live' ? ks.currentWindowStartMs  : null,
+    count:    ks.currentCount,
+    hms:      session.pageType === 'vod'
+      ? secToHMS(ks.currentWindowStartSec)
+      : new Date(ks.currentWindowStartMs).toLocaleTimeString('ko-KR'),
+  };
+
+  ks.windows.push(windowEntry);
+  if (ks.windows.length > 20) ks.windows = ks.windows.slice(-20);
+
+  const result = detectSpike(ks.windows);
+  if (result.isSpike) {
+    const spike = {
+      keyword,
+      ...windowEntry,
+      zScore: result.zScore,
+      mean:   result.mean,
+      ratio:  result.mean > 0
+        ? Math.round((windowEntry.count / result.mean) * 100) / 100
+        : null,
+    };
+    session.keywordSpikes.push(spike);
+    console.log('[chzzk-analyzer] Keyword spike:', spike);
+    updateBadge(session.spikes.length + session.keywordSpikes.length);
+    notifyTabs(session.pageId, { type: 'KEYWORD_SPIKE_UPDATE', spike });
+  }
+
+  ks.currentWindowIndex++;
+  ks.currentCount = 0;
+}
+
+// ── 키워드 빈도 처리 ──────────────────────────────────────────────────────────
+function processKeywords(session, texts, msg) {
+  if (!KEYWORDS.length || !texts.length) return;
+
+  for (const keyword of KEYWORDS) {
+    const matchCount = texts.filter(t => t.includes(keyword)).length;
+    const ks = initKeywordState(session, keyword);
+
+    if (msg.pageType === 'vod') {
+      const vt = msg.videoTimestamp ?? 0;
+      if (ks.currentWindowStartSec === null) {
+        ks.currentWindowStartSec = Math.floor(vt / WINDOW_SIZE_SEC) * WINDOW_SIZE_SEC;
+      }
+      const expectedIdx = Math.floor(vt / WINDOW_SIZE_SEC);
+      while (ks.currentWindowIndex < expectedIdx) {
+        flushKeywordWindow(session, keyword);
+        ks.currentWindowStartSec = ks.currentWindowIndex * WINDOW_SIZE_SEC;
+      }
+      ks.currentCount += matchCount;
+    } else {
+      const now = msg.wallTimestamp;
+      if (ks.currentWindowStartMs === null) ks.currentWindowStartMs = now;
+      if (now - ks.currentWindowStartMs >= WINDOW_SIZE_SEC * 1000) {
+        flushKeywordWindow(session, keyword);
+        ks.currentWindowStartMs = now;
+      }
+      ks.currentCount += matchCount;
+    }
+  }
 }
 
 // ── Handle incoming chat message ──────────────────────────────────────────────
@@ -197,6 +292,9 @@ function handleChatMessage(msg) {
     session.currentWindowCount += msg.count;
   }
 
+  // Keyword processing
+  processKeywords(session, msg.texts || [], msg);
+
   // Persist to session storage
   persistSession(session);
 }
@@ -228,6 +326,7 @@ function persistSession(session) {
         startedAt: session.startedAt,
         windows: session.windows.slice(-200),
         spikes: session.spikes,
+        keywordSpikes: session.keywordSpikes,
         totalMessages: session.totalMessages,
       };
       try {
@@ -276,10 +375,12 @@ async function restoreSession(pageId, pageType) {
 
     // 스파이크 기록만 복원 (윈도우는 복원하지 않음)
     // → 윈도우를 복원하면 기준선 계산이 꼬여서 새 스파이크를 못 잡음
-    session.spikes        = stored.spikes       || [];
-    session.totalMessages = stored.totalMessages|| 0;
-    session.startedAt     = stored.startedAt    || session.startedAt;
-    session.pageType      = pageType            || stored.pageType || 'unknown';
+    session.spikes        = stored.spikes        || [];
+    session.keywordSpikes = stored.keywordSpikes || [];
+    session.totalMessages = stored.totalMessages || 0;
+    session.startedAt     = stored.startedAt     || session.startedAt;
+    session.pageType      = pageType             || stored.pageType || 'unknown';
+    session.keywordState  = {};
 
     // 윈도우 추적 상태 초기화 (서비스 워커가 살아있을 때 이전 값이 남아있으면
     // expectedWindowIdx가 currentWindowIndex를 따라잡지 못해 윈도우가 플러시 안 됨)
@@ -297,6 +398,7 @@ async function restoreSession(pageId, pageType) {
       type: 'STATS_UPDATE',
       windows: session.windows.slice(-50),
       spikes: session.spikes,
+      keywordSpikes: session.keywordSpikes,
       totalMessages: session.totalMessages,
     });
   } catch (e) {
@@ -434,6 +536,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg.settings.zThreshold   !== undefined) Z_THRESH        = msg.settings.zThreshold;
         if (msg.settings.windowSize   !== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
         if (msg.settings.saveThumbnail !== undefined) SAVE_THUMBNAIL = msg.settings.saveThumbnail;
+        if (msg.settings.keywords      !== undefined) KEYWORDS        = msg.settings.keywords;
         sendResponse({ ok: true });
       });
       return true;

@@ -16,22 +16,32 @@ const statusBar   = document.getElementById('status-bar');
 const btnTxt      = document.getElementById('btn-export-txt');
 const btnCsv      = document.getElementById('btn-export-csv');
 const btnClear    = document.getElementById('btn-clear');
-const settingZ         = document.getElementById('setting-z');
-const settingWin       = document.getElementById('setting-window');
-const settingThumbnail = document.getElementById('setting-thumbnail');
-const btnSave          = document.getElementById('btn-save-settings');
-const btnClearThumbs   = document.getElementById('btn-clear-thumbnails');
-const storageBarFill   = document.getElementById('storage-bar-fill');
-const storageText      = document.getElementById('storage-text');
+const settingZ            = document.getElementById('setting-z');
+const settingWin          = document.getElementById('setting-window');
+const settingThumbnail    = document.getElementById('setting-thumbnail');
+const btnSave             = document.getElementById('btn-save-settings');
+const btnClearThumbs      = document.getElementById('btn-clear-thumbnails');
+const storageBarFill      = document.getElementById('storage-bar-fill');
+const storageText         = document.getElementById('storage-text');
+const tabVolume           = document.getElementById('tab-volume');
+const tabKeyword          = document.getElementById('tab-keyword');
+const settingKeywordInput = document.getElementById('setting-keyword-input');
+const btnAddKeyword       = document.getElementById('btn-add-keyword');
+const keywordTagList      = document.getElementById('keyword-tag-list');
+
+let activeTab       = 'volume';
+let currentKeywords = [];
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function init() {
   // Load settings
   const res = await bgMessage({ type: 'GET_SETTINGS' });
   if (res?.settings) {
-    settingZ.value             = res.settings.zThreshold  ?? 3.0;
-    settingWin.value           = res.settings.windowSize  ?? 30;
+    settingZ.value             = res.settings.zThreshold   ?? 3.0;
+    settingWin.value           = res.settings.windowSize   ?? 30;
     settingThumbnail.checked   = res.settings.saveThumbnail ?? true;
+    currentKeywords            = res.settings.keywords     ?? [];
+    renderKeywordTags();
   }
 
   // Find active chzzk tab
@@ -109,6 +119,11 @@ function renderSession(session) {
     spikeBadge.classList.remove('visible');
     btnTxt.disabled = true;
     btnCsv.disabled = true;
+  }
+
+  if (activeTab === 'keyword') {
+    renderKeywordSpikes(session);
+    return;
   }
 
   if (session.spikes.length === 0) {
@@ -230,6 +245,106 @@ btnClearThumbs.addEventListener('click', async () => {
   updateStorageBar();
   await refreshData();
 });
+
+// ── 탭 전환 ───────────────────────────────────────────────────────────────────
+tabVolume.addEventListener('click', () => {
+  activeTab = 'volume';
+  tabVolume.classList.add('active');
+  tabKeyword.classList.remove('active');
+  renderSession(currentSession);
+});
+
+tabKeyword.addEventListener('click', () => {
+  activeTab = 'keyword';
+  tabKeyword.classList.add('active');
+  tabVolume.classList.remove('active');
+  renderSession(currentSession);
+});
+
+// ── 키워드 관리 ───────────────────────────────────────────────────────────────
+function renderKeywordTags() {
+  keywordTagList.innerHTML = currentKeywords.map(kw => `
+    <span class="keyword-tag">
+      ${kw}
+      <span class="keyword-tag-del" data-kw="${kw}">×</span>
+    </span>
+  `).join('');
+  keywordTagList.querySelectorAll('.keyword-tag-del').forEach(el => {
+    el.addEventListener('click', () => removeKeyword(el.dataset.kw));
+  });
+}
+
+function addKeyword(kw) {
+  kw = kw.trim();
+  if (!kw || currentKeywords.includes(kw)) return;
+  currentKeywords.push(kw);
+  saveKeywords();
+  renderKeywordTags();
+}
+
+function removeKeyword(kw) {
+  currentKeywords = currentKeywords.filter(k => k !== kw);
+  saveKeywords();
+  renderKeywordTags();
+}
+
+async function saveKeywords() {
+  await bgMessage({ type: 'SAVE_SETTINGS', settings: { keywords: currentKeywords } });
+}
+
+btnAddKeyword.addEventListener('click', () => {
+  addKeyword(settingKeywordInput.value);
+  settingKeywordInput.value = '';
+});
+
+settingKeywordInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    addKeyword(settingKeywordInput.value);
+    settingKeywordInput.value = '';
+  }
+});
+
+// ── 키워드 스파이크 렌더 ──────────────────────────────────────────────────────
+function renderKeywordSpikes(session) {
+  const kSpikes = session?.keywordSpikes || [];
+
+  if (!currentKeywords.length) {
+    spikeList.innerHTML = '<div class="empty-msg">키워드를 추가하면<br>해당 단어의 급증 구간을 감지합니다.</div>';
+    return;
+  }
+
+  if (kSpikes.length === 0) {
+    spikeList.innerHTML = '<div class="empty-msg">키워드 급증 구간이 아직 없습니다.</div>';
+    return;
+  }
+
+  const top3 = new Set(
+    [...kSpikes]
+      .map((s, i) => ({ i, z: s.zScore }))
+      .sort((a, b) => b.z - a.z)
+      .slice(0, 3)
+      .map(x => x.i)
+  );
+
+  spikeList.innerHTML = kSpikes
+    .map((s, i) => `
+      <div class="spike-item" data-index="${i}" data-sec="${s.startSec ?? ''}" title="클릭하면 해당 시점으로 이동">
+        <div class="keyword-badge">${s.keyword}</div>
+        <div class="spike-info">
+          <span class="spike-time">▶ ${s.hms}${top3.has(i) ? ' <span class="spike-star">★</span>' : ''}</span>
+          <span class="spike-count">${s.count}회/30s</span>
+          <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
+        </div>
+      </div>`)
+    .join('');
+
+  spikeList.querySelectorAll('.spike-item[data-sec]').forEach(el => {
+    el.addEventListener('click', () => {
+      const sec = parseFloat(el.dataset.sec);
+      if (!isNaN(sec)) seekToTime(sec);
+    });
+  });
+}
 
 // ── 영상 시점 이동 ────────────────────────────────────────────────────────────
 async function seekToTime(sec) {
