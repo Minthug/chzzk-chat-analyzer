@@ -276,7 +276,14 @@ function renderKeywordTags() {
 
 function addKeyword(kw) {
   kw = kw.trim();
-  if (!kw || currentKeywords.includes(kw)) return;
+  if (!kw) return;
+  if (kw.length < 2) {
+    settingKeywordInput.value = '';
+    settingKeywordInput.placeholder = '2글자 이상 입력해주세요';
+    setTimeout(() => { settingKeywordInput.placeholder = '키워드 입력 후 Enter 또는 추가'; }, 2000);
+    return;
+  }
+  if (currentKeywords.includes(kw)) return;
   currentKeywords.push(kw);
   saveKeywords();
   renderKeywordTags();
