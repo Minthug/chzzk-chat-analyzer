@@ -68,6 +68,8 @@ async function init() {
 
 // ── Refresh session data from background ──────────────────────────────────────
 async function refreshData() {
+  // 메모 입력 중이면 갱신 스킵 (타이핑 내용 날아가지 않도록)
+  if (document.activeElement?.classList.contains('spike-memo')) return;
   const res = await bgMessage({ type: 'GET_SESSION_DATA', pageId: currentPageId });
   currentSession = res?.data || null;
   renderSession(currentSession);
@@ -152,14 +154,19 @@ function renderSession(session) {
           <span class="spike-time">▶ ${s.hms}${top3.has(i) ? ' <span class="spike-star">★</span>' : ''}</span>
           <span class="spike-count">${s.count}개/30s</span>
           <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
+          <input class="spike-memo" type="text" placeholder="메모 추가..."
+            value="${(s.memo || '').replace(/"/g, '&quot;')}"
+            data-window-index="${s.windowIndex}"
+            data-is-keyword="false" />
         </div>
       </div>`
     )
     .join('');
 
-  // 클릭 시 영상 해당 시점으로 이동
+  // 클릭 시 영상 해당 시점으로 이동 (메모 입력 클릭은 무시)
   spikeList.querySelectorAll('.spike-item[data-sec]').forEach((el) => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('spike-memo')) return;
       const sec = parseFloat(el.dataset.sec);
       if (isNaN(sec)) return;
       seekToTime(sec);
@@ -176,14 +183,14 @@ function formatTxt(session) {
     '',
     ...session.spikes.map(
       (s) =>
-        `${s.hms} - 채팅 급증 (30초 ${s.count}개${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore})`
+        `${s.hms} - 채팅 급증 (30초 ${s.count}개${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore})${s.memo ? ' // ' + s.memo : ''}`
     ),
   ];
   return lines.join('\n');
 }
 
 function formatCsv(session) {
-  const header = 'timestamp_hms,timestamp_sec,chat_count,avg_count,spike_ratio,z_score';
+  const header = 'timestamp_hms,timestamp_sec,chat_count,avg_count,spike_ratio,z_score,memo';
   const rows = session.spikes.map((s) =>
     [
       s.hms,
@@ -192,6 +199,7 @@ function formatCsv(session) {
       s.mean ?? '',
       s.ratio ?? '',
       s.zScore,
+      s.memo ? `"${s.memo.replace(/"/g, '""')}"` : '',
     ].join(',')
   );
   return [header, ...rows].join('\n');
@@ -244,6 +252,25 @@ btnClearThumbs.addEventListener('click', async () => {
   setStatus(`📷 썸네일 ${res?.removed ?? 0}개 삭제 완료`);
   updateStorageBar();
   await refreshData();
+});
+
+// ── 메모 자동저장 (800ms 디바운스) ────────────────────────────────────────────
+let memoSaveTimer = null;
+spikeList.addEventListener('input', (e) => {
+  const input = e.target;
+  if (!input.classList.contains('spike-memo')) return;
+  clearTimeout(memoSaveTimer);
+  memoSaveTimer = setTimeout(async () => {
+    if (!currentPageId) return;
+    await bgMessage({
+      type: 'SAVE_MEMO',
+      pageId:      currentPageId,
+      windowIndex: parseInt(input.dataset.windowIndex),
+      memo:        input.value,
+      isKeyword:   input.dataset.isKeyword === 'true',
+      keyword:     input.dataset.keyword || null,
+    });
+  }, 800);
 });
 
 // ── 탭 전환 ───────────────────────────────────────────────────────────────────
@@ -341,12 +368,18 @@ function renderKeywordSpikes(session) {
           <span class="spike-time">▶ ${s.hms}${top3.has(i) ? ' <span class="spike-star">★</span>' : ''}</span>
           <span class="spike-count">${s.count}회/30s</span>
           <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
+          <input class="spike-memo" type="text" placeholder="메모 추가..."
+            value="${(s.memo || '').replace(/"/g, '&quot;')}"
+            data-window-index="${s.windowIndex}"
+            data-is-keyword="true"
+            data-keyword="${s.keyword}" />
         </div>
       </div>`)
     .join('');
 
   spikeList.querySelectorAll('.spike-item[data-sec]').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('spike-memo')) return;
       const sec = parseFloat(el.dataset.sec);
       if (!isNaN(sec)) seekToTime(sec);
     });

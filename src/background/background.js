@@ -526,6 +526,38 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
     }
 
+    case 'SAVE_MEMO': {
+      chrome.storage.local.get(STORAGE_KEY).then(async (result) => {
+        const existing = result[STORAGE_KEY] || {};
+        const stored   = existing[msg.pageId];
+        if (!stored) { sendResponse({ ok: false }); return; }
+
+        const spikes = msg.isKeyword ? stored.keywordSpikes : stored.spikes;
+        const spike  = spikes?.find(s =>
+          s.windowIndex === msg.windowIndex &&
+          (!msg.isKeyword || s.keyword === msg.keyword)
+        );
+
+        if (spike) {
+          spike.memo = msg.memo;
+          await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+
+          // 메모리 세션도 동기화
+          const mem = sessions[msg.pageId];
+          if (mem) {
+            const memSpikes = msg.isKeyword ? mem.keywordSpikes : mem.spikes;
+            const memSpike  = memSpikes?.find(s =>
+              s.windowIndex === msg.windowIndex &&
+              (!msg.isKeyword || s.keyword === msg.keyword)
+            );
+            if (memSpike) memSpike.memo = msg.memo;
+          }
+        }
+        sendResponse({ ok: true });
+      });
+      return true;
+    }
+
     case 'GET_SETTINGS': {
       getSettings().then((settings) => sendResponse({ settings }));
       return true;
