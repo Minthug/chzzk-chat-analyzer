@@ -352,7 +352,7 @@ function persistSession(session) {
 // ── 자동 내보내기 (TXT) ───────────────────────────────────────────────────────
 function formatSpikesToTxt(session) {
   const allSpikes = [
-    ...(session.spikes || []).map(s => ({ ...s, _type: '볼륨' })),
+    ...(session.spikes || []).map(s => ({ ...s, _type: '포인트' })),
     ...(session.keywordSpikes || []).map(s => ({ ...s, _type: `키워드:${s.keyword}` })),
   ].sort((a, b) => (a.startSec ?? a.startMs ?? 0) - (b.startSec ?? b.startMs ?? 0));
 
@@ -364,7 +364,7 @@ function formatSpikesToTxt(session) {
     `# 페이지 ID: ${session.pageId}  |  생성: ${now}`,
     '',
     ...allSpikes.map(s =>
-      `${s.hms} [${s._type}] - ${s.count}${s._type === '볼륨' ? '개' : '회'}/30s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
+      `${s.hms} [${s._type}] - ${s.count}${s._type === '포인트' ? '개' : '회'}/30s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
     ),
   ];
   return lines.join('\n');

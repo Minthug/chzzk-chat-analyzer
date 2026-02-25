@@ -188,9 +188,9 @@ function renderSession(session) {
 function formatTxt(session) {
   const now = new Date().toLocaleString('ko-KR');
 
-  // 볼륨 + 키워드 스파이크를 시간순으로 합치기
+  // 포인트 + 키워드 스파이크를 시간순으로 합치기
   const allSpikes = [
-    ...session.spikes.map(s => ({ ...s, _type: '볼륨' })),
+    ...session.spikes.map(s => ({ ...s, _type: '포인트' })),
     ...(session.keywordSpikes || []).map(s => ({ ...s, _type: `키워드:${s.keyword}` })),
   ].sort((a, b) => (a.startSec ?? 0) - (b.startSec ?? 0));
 
@@ -200,7 +200,7 @@ function formatTxt(session) {
     '',
     ...allSpikes.map(
       (s) =>
-        `${s.hms} [${s._type}] - ${s.count}${s._type === '볼륨' ? '개' : '회'}/30s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
+        `${s.hms} [${s._type}] - ${s.count}${s._type === '포인트' ? '개' : '회'}/30s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
     ),
   ];
   return lines.join('\n');
@@ -210,7 +210,7 @@ function formatCsv(session) {
   const header = 'type,keyword,timestamp_hms,timestamp_sec,chat_count,avg_count,spike_ratio,z_score,memo';
 
   const allSpikes = [
-    ...session.spikes.map(s => ({ ...s, _type: '볼륨', _keyword: '' })),
+    ...session.spikes.map(s => ({ ...s, _type: '포인트', _keyword: '' })),
     ...(session.keywordSpikes || []).map(s => ({ ...s, _type: '키워드', _keyword: s.keyword })),
   ].sort((a, b) => (a.startSec ?? 0) - (b.startSec ?? 0));
 
