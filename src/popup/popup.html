@@ -292,6 +292,33 @@
       font-size: 10px;
       color: #555;
     }
+
+    .donate-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 14px 10px;
+      border-top: 1px solid #1a1a2e;
+    }
+    .donate-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 14px;
+      background: #1a1a2e;
+      border: 1px solid #2a2a4a;
+      border-radius: 14px;
+      color: #888;
+      font-size: 11px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .donate-btn:hover {
+      background: #ffcd00;
+      border-color: #ffcd00;
+      color: #1a1400;
+    }
   </style>
 </head>
 <body>
@@ -383,6 +410,12 @@
   </div>
 
   <div class="status-bar" id="status-bar">대기 중</div>
+
+  <div class="donate-bar">
+    <a class="donate-btn" href="https://qr.kakaopay.com/FFSsYFjn3" target="_blank">
+      ☕ 개발자 후원하기
+    </a>
+  </div>
 
   <script src="popup.js"></script>
 </body>

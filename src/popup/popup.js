@@ -470,5 +470,11 @@ setInterval(refreshData, 5000);
 // ── 팝업 열리면 뱃지 초기화 ───────────────────────────────────────────────────
 chrome.action.setBadgeText({ text: '' });
 
+// ── 후원 링크 ─────────────────────────────────────────────────────────────────
+document.querySelector('.donate-btn').addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: 'https://qr.kakaopay.com/FFSsYFjn3' });
+});
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init();
