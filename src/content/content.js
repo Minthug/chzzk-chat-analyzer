@@ -199,6 +199,18 @@
     }, 200);
   }
 
+  // ── VOD 영상 종료 감지 ────────────────────────────────────────────────────
+  function watchVideoEnd() {
+    if (getPageType() !== 'vod') return;
+    const video = getVideoEl();
+    if (!video || video._chzzkEndWatched) return;
+    video._chzzkEndWatched = true;
+    video.addEventListener('ended', () => {
+      INFO('video ended - auto clearing session');
+      safeSend({ type: 'VIDEO_ENDED', pageId: getPageId() });
+    });
+  }
+
   function startObserving(container) {
     if (chatObserver) chatObserver.disconnect();
     observedContainer = container;
@@ -253,6 +265,7 @@
     if (container) {
       startObserving(container);
       injectOverlay();
+      watchVideoEnd();
       return;
     }
     mountTimer = setTimeout(tryMount, 1000);

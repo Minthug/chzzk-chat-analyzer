@@ -25,6 +25,9 @@ chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, 
 // keyed by pageId
 const sessions = {};
 
+// tabId → pageId 매핑 (페이지 이동 감지용)
+const tabPageMap = {};
+
 function getSession(pageId) {
   if (!sessions[pageId]) {
     sessions[pageId] = {
@@ -346,6 +349,20 @@ function persistSession(session) {
   }, 500);
 }
 
+// ── 세션 초기화 헬퍼 ─────────────────────────────────────────────────────────
+async function clearSession(pageId) {
+  delete sessions[pageId];
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const existing = result[STORAGE_KEY] || {};
+    delete existing[pageId];
+    await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+    console.log('[chzzk-analyzer] Session auto-cleared:', pageId);
+  } catch (e) {
+    console.error('[chzzk-analyzer] Failed to clear session:', e);
+  }
+}
+
 // ── Get settings ─────────────────────────────────────────────────────────────
 async function getSettings() {
   const result = await chrome.storage.sync.get({
@@ -410,11 +427,14 @@ async function restoreSession(pageId, pageType) {
 // ── Message router ────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   switch (msg.type) {
-    case 'WS_OPEN':
+    case 'WS_OPEN': {
+      const tabId = sender.tab?.id;
+      if (tabId) tabPageMap[tabId] = msg.pageId;
       console.log('[chzzk-analyzer] WebSocket opened:', msg.url, 'pageType:', msg.pageType);
       getSession(msg.pageId).pageType = msg.pageType;
       restoreSession(msg.pageId, msg.pageType); // 이전 세션 복원
       break;
+    }
 
     case 'WS_CLOSE':
       console.log('[chzzk-analyzer] WebSocket closed for:', msg.pageId);
@@ -428,9 +448,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       handleChatMessage(msg);
       break;
 
-    case 'PAGE_NAVIGATE':
-      console.log('[chzzk-analyzer] Navigation to:', msg.pageType, msg.pageId);
+    case 'PAGE_NAVIGATE': {
+      const tabId = sender.tab?.id;
+      const oldPageId = tabId ? tabPageMap[tabId] : null;
+      const newPageId = msg.pageId;
+
+      if (tabId) tabPageMap[tabId] = newPageId;
+
+      // 다른 영상/방송으로 이동 시 이전 세션 자동 초기화
+      if (oldPageId && oldPageId !== newPageId) {
+        clearSession(oldPageId);
+      }
+      console.log('[chzzk-analyzer] Navigation to:', msg.pageType, newPageId);
       break;
+    }
 
     case 'GET_SESSION_DATA': {
       chrome.storage.local.get(STORAGE_KEY).then((result) => {
@@ -446,6 +477,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
       return true;
     }
+
+    case 'VIDEO_ENDED':
+      // VOD 재생 완료 → 세션 자동 초기화
+      clearSession(msg.pageId);
+      break;
 
     case 'CLEAR_SESSION': {
       delete sessions[msg.pageId];
