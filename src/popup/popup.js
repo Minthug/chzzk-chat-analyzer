@@ -470,10 +470,13 @@ setInterval(refreshData, 5000);
 // ── 팝업 열리면 뱃지 초기화 ───────────────────────────────────────────────────
 chrome.action.setBadgeText({ text: '' });
 
-// ── 후원 링크 ─────────────────────────────────────────────────────────────────
-document.querySelector('.donate-btn').addEventListener('click', (e) => {
-  e.preventDefault();
-  chrome.tabs.create({ url: 'https://qr.kakaopay.com/FFSsYFjn3' });
+// ── 후원 계좌 복사 ────────────────────────────────────────────────────────────
+document.getElementById('donate-account').addEventListener('click', () => {
+  navigator.clipboard.writeText('1002-4571-5093').then(() => {
+    const msg = document.getElementById('donate-copy-msg');
+    msg.classList.add('visible');
+    setTimeout(() => msg.classList.remove('visible'), 1800);
+  });
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

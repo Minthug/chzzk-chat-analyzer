@@ -296,29 +296,40 @@
     .donate-bar {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
       padding: 8px 14px 10px;
       border-top: 1px solid #1a1a2e;
+      gap: 8px;
     }
-    .donate-btn {
+    .donate-label {
+      font-size: 10px;
+      color: #555;
+      white-space: nowrap;
+    }
+    .donate-account {
       display: flex;
       align-items: center;
-      gap: 5px;
-      padding: 5px 14px;
+      gap: 6px;
+      padding: 4px 10px;
       background: #1a1a2e;
       border: 1px solid #2a2a4a;
       border-radius: 14px;
-      color: #888;
-      font-size: 11px;
       cursor: pointer;
-      text-decoration: none;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      transition: background 0.15s, border-color 0.15s;
+      flex: 1;
+      justify-content: center;
     }
-    .donate-btn:hover {
-      background: #ffcd00;
-      border-color: #ffcd00;
-      color: #1a1400;
+    .donate-account:hover { background: #1f2a3e; border-color: #3a4a6a; }
+    .donate-account-bank { font-size: 10px; color: #5090d0; font-weight: 600; }
+    .donate-account-num { font-size: 11px; color: #aaa; letter-spacing: 0.3px; }
+    .donate-copy-msg {
+      font-size: 10px;
+      color: #27ae60;
+      opacity: 0;
+      transition: opacity 0.2s;
+      white-space: nowrap;
     }
+    .donate-copy-msg.visible { opacity: 1; }
   </style>
 </head>
 <body>
@@ -412,9 +423,12 @@
   <div class="status-bar" id="status-bar">대기 중</div>
 
   <div class="donate-bar">
-    <a class="donate-btn" href="https://qr.kakaopay.com/FFSsYFjn3" target="_blank">
-      ☕ 개발자 후원하기
-    </a>
+    <span class="donate-label">☕ 후원</span>
+    <div class="donate-account" id="donate-account">
+      <span class="donate-account-bank">토스뱅크</span>
+      <span class="donate-account-num">1002-4571-5093</span>
+    </div>
+    <span class="donate-copy-msg" id="donate-copy-msg">복사됨!</span>
   </div>
 
   <script src="popup.js"></script>
