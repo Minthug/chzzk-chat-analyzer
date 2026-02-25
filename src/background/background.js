@@ -349,18 +349,62 @@ function persistSession(session) {
   }, 500);
 }
 
+// ── 자동 내보내기 (TXT) ───────────────────────────────────────────────────────
+function formatSpikesToTxt(session) {
+  const allSpikes = [
+    ...(session.spikes || []).map(s => ({ ...s, _type: '볼륨' })),
+    ...(session.keywordSpikes || []).map(s => ({ ...s, _type: `키워드:${s.keyword}` })),
+  ].sort((a, b) => (a.startSec ?? a.startMs ?? 0) - (b.startSec ?? b.startMs ?? 0));
+
+  if (allSpikes.length === 0) return null;
+
+  const now = new Date().toLocaleString('ko-KR');
+  const lines = [
+    '# 치지직 편집 포인트 | 채팅 급증 구간 (자동 저장)',
+    `# 페이지 ID: ${session.pageId}  |  생성: ${now}`,
+    '',
+    ...allSpikes.map(s =>
+      `${s.hms} [${s._type}] - ${s.count}${s._type === '볼륨' ? '개' : '회'}/30s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
+    ),
+  ];
+  return lines.join('\n');
+}
+
+async function autoExport(session) {
+  if (!session) return;
+  const content = formatSpikesToTxt(session);
+  if (!content) return;
+
+  try {
+    const ts = new Date().toISOString().slice(0, 10);
+    const filename = `chzzk-spikes-${session.pageId}-${ts}.txt`;
+    const dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(content);
+    await chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
+    console.log('[chzzk-analyzer] Auto-exported:', filename);
+  } catch (e) {
+    console.error('[chzzk-analyzer] Auto-export failed:', e);
+  }
+}
+
 // ── 세션 초기화 헬퍼 ─────────────────────────────────────────────────────────
 async function clearSession(pageId) {
-  delete sessions[pageId];
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
     const existing = result[STORAGE_KEY] || {};
+    const stored = existing[pageId];
+
+    // 스파이크가 있으면 초기화 전에 자동 내보내기
+    if (stored && (stored.spikes?.length > 0 || stored.keywordSpikes?.length > 0)) {
+      await autoExport(stored);
+    }
+
     delete existing[pageId];
     await chrome.storage.local.set({ [STORAGE_KEY]: existing });
     console.log('[chzzk-analyzer] Session auto-cleared:', pageId);
   } catch (e) {
     console.error('[chzzk-analyzer] Failed to clear session:', e);
   }
+  delete sessions[pageId];
 }
 
 // ── Get settings ─────────────────────────────────────────────────────────────

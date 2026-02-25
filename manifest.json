@@ -8,7 +8,8 @@
     "tabs",
     "scripting",
     "storage",
-    "alarms"
+    "alarms",
+    "downloads"
   ],
 
   "host_permissions": [
