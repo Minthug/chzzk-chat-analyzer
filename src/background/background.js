@@ -45,6 +45,7 @@ function getSession(pageId) {
       spikes: [],
       totalMessages: 0,
       channelName: null,
+      liveTitle: null,
       // Keyword spikes
       keywordSpikes: [],
       keywordState: {},  // { [keyword]: { currentCount, currentWindowIndex, currentWindowStartSec, currentWindowStartMs, windows[] } }
@@ -349,6 +350,19 @@ function persistSession(session) {
   }, 500);
 }
 
+// ── 파일명 헬퍼 ───────────────────────────────────────────────────────────────
+function sanitizeFilename(str) {
+  if (!str) return '';
+  return str.replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, '_').slice(0, 40);
+}
+
+function buildFilename(session, ext) {
+  const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const ch    = sanitizeFilename(session.channelName) || session.pageId;
+  const title = sanitizeFilename(session.liveTitle);
+  return title ? `${ch}_${title}_${date}.${ext}` : `${ch}_${date}.${ext}`;
+}
+
 // ── 자동 내보내기 (TXT) ───────────────────────────────────────────────────────
 function formatSpikesToTxt(session) {
   const allSpikes = [
@@ -376,8 +390,7 @@ async function autoExport(session) {
   if (!content) return;
 
   try {
-    const ts = new Date().toISOString().slice(0, 10);
-    const filename = `chzzk-spikes-${session.pageId}-${ts}.txt`;
+    const filename = buildFilename(session, 'txt');
     const dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(content);
     await chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
     console.log('[chzzk-analyzer] Auto-exported:', filename);
@@ -475,7 +488,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const tabId = sender.tab?.id;
       if (tabId) tabPageMap[tabId] = msg.pageId;
       console.log('[chzzk-analyzer] WebSocket opened:', msg.url, 'pageType:', msg.pageType);
-      getSession(msg.pageId).pageType = msg.pageType;
+      const openSession = getSession(msg.pageId);
+      openSession.pageType = msg.pageType;
+      if (msg.channelName) openSession.channelName = msg.channelName;
+      if (msg.liveTitle)   openSession.liveTitle   = msg.liveTitle;
       restoreSession(msg.pageId, msg.pageType); // 이전 세션 복원
       break;
     }

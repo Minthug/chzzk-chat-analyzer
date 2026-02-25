@@ -230,6 +230,18 @@ function formatCsv(session) {
   return [header, ...rows].join('\n');
 }
 
+function sanitizeFilename(str) {
+  if (!str) return '';
+  return str.replace(/[/\\:*?"<>|]/g, '').replace(/\s+/g, '_').slice(0, 40);
+}
+
+function buildFilename(session, ext) {
+  const date  = new Date().toISOString().slice(0, 10);
+  const ch    = sanitizeFilename(session.channelName) || session.pageId;
+  const title = sanitizeFilename(session.liveTitle);
+  return title ? `${ch}_${title}_${date}.${ext}` : `${ch}_${date}.${ext}`;
+}
+
 function downloadText(content, filename) {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
@@ -243,14 +255,12 @@ function downloadText(content, filename) {
 // ── Event listeners ────────────────────────────────────────────────────────────
 btnTxt.addEventListener('click', () => {
   if (!currentSession) return;
-  const ts = new Date().toISOString().slice(0, 10);
-  downloadText(formatTxt(currentSession), `chzzk-spikes-${currentSession.pageId}-${ts}.txt`);
+  downloadText(formatTxt(currentSession), buildFilename(currentSession, 'txt'));
 });
 
 btnCsv.addEventListener('click', () => {
   if (!currentSession) return;
-  const ts = new Date().toISOString().slice(0, 10);
-  downloadText(formatCsv(currentSession), `chzzk-spikes-${currentSession.pageId}-${ts}.csv`);
+  downloadText(formatCsv(currentSession), buildFilename(currentSession, 'csv'));
 });
 
 btnClear.addEventListener('click', async () => {
