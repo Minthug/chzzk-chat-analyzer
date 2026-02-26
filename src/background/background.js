@@ -229,7 +229,12 @@ function processKeywords(session, texts, msg) {
   if (!KEYWORDS.length || !texts.length) return;
 
   for (const keyword of KEYWORDS) {
-    const matchCount = texts.filter(t => t.includes(keyword)).length;
+    // "[뱃지] 닉네임_메시지" 포맷에서 _ 이후 메시지 부분만 키워드 검색
+    const matchCount = texts.filter(t => {
+      const idx = t.indexOf('_');
+      const msgPart = idx > 0 ? t.slice(idx + 1) : t;
+      return msgPart.includes(keyword);
+    }).length;
     const ks = initKeywordState(session, keyword);
 
     if (msg.pageType === 'vod') {

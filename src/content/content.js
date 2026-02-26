@@ -28,19 +28,40 @@
     ],
   };
 
-  // ── 채팅 텍스트 추출 ─────────────────────────────────────────────────────
-  function extractChatText(node) {
+  // ── 채팅 정보 추출 (뱃지 + 닉네임 + 메시지) ──────────────────────────────
+  function extractChatInfo(node) {
+    // 뱃지: badge_container__ 안의 img src 경로로 구분
+    const badgeSet = new Set();
+    const badgeImgs = node.querySelectorAll('[class*="badge_container__"] img');
+    for (const img of badgeImgs) {
+      const src = img.src || '';
+      if (src.includes('gift_sub'))           badgeSet.add('선물구독');
+      else if (src.includes('subscription/badge')) badgeSet.add('구독');
+      else if (src.includes('fan_'))          badgeSet.add('팬');
+      else if (/manager|operator/.test(src))  badgeSet.add('매니저');
+    }
+
+    // 닉네임
+    const nickEl = node.querySelector('[class*="name_text__"]')
+                || node.querySelector('[class*="live_chatting_username_nickname__"]');
+    const nickname = nickEl?.textContent?.trim() || '';
+
+    // 메시지 텍스트
     const msgSelectors = [
       '[class*="live_chatting_message_text"]',
       '[class*="message_text"]',
       '[class*="chatting_message"]',
       '[class*="chat_message"]',
     ];
+    let text = '';
     for (const sel of msgSelectors) {
       const el = node.querySelector(sel);
-      if (el) return el.textContent.trim();
+      if (el) { text = el.textContent.trim(); break; }
     }
-    return node.textContent.trim();
+    if (!text) text = node.textContent.trim();
+
+    const badgeStr = badgeSet.size ? [...badgeSet].map(b => `[${b}]`).join('') + ' ' : '';
+    return nickname ? `${badgeStr}${nickname}_${text}` : text;
   }
 
   // ── 페이지 타입 ───────────────────────────────────────────────────────────
@@ -222,11 +243,11 @@ function getPageType() {
         for (const node of mutation.addedNodes) {
           if (isChatItem(node)) {
             newChats++;
-            texts.push(extractChatText(node));
+            texts.push(extractChatInfo(node));
           } else if (node.nodeType === 1) {
             const items = node.querySelectorAll(SELECTORS.chatItem.join(','));
             newChats += items.length;
-            items.forEach(item => texts.push(extractChatText(item)));
+            items.forEach(item => texts.push(extractChatInfo(item)));
           }
         }
       }
