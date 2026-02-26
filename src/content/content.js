@@ -44,48 +44,7 @@
   }
 
   // ── 페이지 타입 ───────────────────────────────────────────────────────────
-  // ── 스트리머명/방제 추출 ──────────────────────────────────────────────────
-  function getPageMeta() {
-    const channelSelectors = [
-      '[class*="channel_name"]',
-      '[class*="streamer_name"]',
-      '[class*="channel_title"]',
-      '[class*="nickname"]',
-    ];
-    const titleSelectors = [
-      '[class*="live_title"]',
-      '[class*="stream_title"]',
-      '[class*="video_title"]',
-      '[class*="title_text"]',
-      '[class*="liveTitle"]',
-    ];
-
-    let channelName = null;
-    for (const sel of channelSelectors) {
-      const el = document.querySelector(sel);
-      if (el?.textContent?.trim()) { channelName = el.textContent.trim(); break; }
-    }
-
-    let liveTitle = null;
-    for (const sel of titleSelectors) {
-      const el = document.querySelector(sel);
-      if (el?.textContent?.trim()) { liveTitle = el.textContent.trim(); break; }
-    }
-
-    // fallback: document.title 파싱 (예: "방제 - 스트리머명 LIVE - CHZZK")
-    if (!channelName || !liveTitle) {
-      const cleaned = document.title.replace(/\s*[-–]\s*CHZZK\s*$/i, '').trim();
-      const parts = cleaned.split(/\s*[-–]\s*/);
-      if (parts.length >= 2) {
-        if (!liveTitle) liveTitle = parts[0]?.trim() || null;
-        if (!channelName) channelName = parts[parts.length - 1]?.replace(/\s+LIVE$/i, '').trim() || null;
-      }
-    }
-
-    return { channelName, liveTitle };
-  }
-
-  function getPageType() {
+function getPageType() {
     const path = window.location.pathname;
     if (path.startsWith('/live/')) return 'live';
     if (path.startsWith('/video/')) return 'vod';
@@ -277,15 +236,12 @@
     chatObserver.observe(container, { childList: true, subtree: true });
     INFO('DOM observer started on', container.className);
 
-    const meta = getPageMeta();
     safeSend({
       type: 'WS_OPEN',
       pageType: getPageType(),
       pageId: getPageId(),
       url: 'dom-observer',
       timestamp: Date.now(),
-      channelName: meta.channelName,
-      liveTitle: meta.liveTitle,
     });
   }
 

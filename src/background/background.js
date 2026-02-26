@@ -350,6 +350,54 @@ function persistSession(session) {
   }, 500);
 }
 
+// ── 페이지 메타 (스트리머명/방제) ────────────────────────────────────────────
+async function fetchPageMeta(pageId, pageType) {
+  try {
+    let url;
+    if (pageType === 'live') {
+      url = `https://api.chzzk.naver.com/service/v2/channels/${pageId}/live-detail`;
+    } else if (pageType === 'vod') {
+      url = `https://api.chzzk.naver.com/service/v1/videos/${pageId}`;
+    } else {
+      return null;
+    }
+
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const content = json?.content;
+    if (!content) return null;
+
+    if (pageType === 'live') {
+      return {
+        channelName: content.channel?.channelName || null,
+        liveTitle: content.liveTitle || null,
+      };
+    } else {
+      return {
+        channelName: content.channel?.channelName || null,
+        liveTitle: content.videoTitle || null,
+      };
+    }
+  } catch (e) {
+    console.warn('[chzzk-analyzer] fetchPageMeta failed:', e);
+    return null;
+  }
+}
+
+function parseTabTitle(title) {
+  if (!title) return { channelName: null, liveTitle: null };
+  const cleaned = title.replace(/\s*[-–]\s*CHZZK\s*$/i, '').trim();
+  const parts = cleaned.split(/\s*[-–]\s*/);
+  if (parts.length >= 2) {
+    return {
+      liveTitle: parts[0]?.trim() || null,
+      channelName: parts[parts.length - 1]?.replace(/\s+LIVE$/i, '').trim() || null,
+    };
+  }
+  return { channelName: cleaned || null, liveTitle: null };
+}
+
 // ── 파일명 헬퍼 ───────────────────────────────────────────────────────────────
 function sanitizeFilename(str) {
   if (!str) return '';
@@ -490,8 +538,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       console.log('[chzzk-analyzer] WebSocket opened:', msg.url, 'pageType:', msg.pageType);
       const openSession = getSession(msg.pageId);
       openSession.pageType = msg.pageType;
-      if (msg.channelName) openSession.channelName = msg.channelName;
-      if (msg.liveTitle)   openSession.liveTitle   = msg.liveTitle;
+
+      // 즉시 폴백: 탭 타이틀 파싱
+      const tabMeta = parseTabTitle(sender.tab?.title);
+      if (tabMeta.channelName) openSession.channelName = tabMeta.channelName;
+      if (tabMeta.liveTitle)   openSession.liveTitle   = tabMeta.liveTitle;
+
+      // 정확한 데이터: chzzk API 비동기 호출 후 덮어쓰기
+      fetchPageMeta(msg.pageId, msg.pageType).then(meta => {
+        const s = sessions[msg.pageId];
+        if (!s || !meta) return;
+        if (meta.channelName) s.channelName = meta.channelName;
+        if (meta.liveTitle)   s.liveTitle   = meta.liveTitle;
+        console.log('[chzzk-analyzer] Page meta:', meta.channelName, '|', meta.liveTitle);
+      });
+
       restoreSession(msg.pageId, msg.pageType); // 이전 세션 복원
       break;
     }
