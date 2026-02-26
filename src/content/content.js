@@ -28,17 +28,13 @@
     ],
   };
 
-  // ── 채팅 정보 추출 (뱃지 + 닉네임 + 메시지) ──────────────────────────────
+  // ── 채팅 정보 추출 (매니저 여부 + 닉네임 + 메시지) ──────────────────────
   function extractChatInfo(node) {
-    // 뱃지: badge_container__ 안의 img src 경로로 구분
-    const badgeSet = new Set();
+    // 매니저 뱃지 감지 (img src 기반)
+    let isManager = false;
     const badgeImgs = node.querySelectorAll('[class*="badge_container__"] img');
     for (const img of badgeImgs) {
-      const src = img.src || '';
-      if (src.includes('gift_sub'))           badgeSet.add('선물구독');
-      else if (src.includes('subscription/badge')) badgeSet.add('구독');
-      else if (src.includes('fan_'))          badgeSet.add('팬');
-      else if (/manager|operator/.test(src))  badgeSet.add('매니저');
+      if (/manager|operator/.test(img.src || '')) { isManager = true; break; }
     }
 
     // 닉네임
@@ -60,8 +56,8 @@
     }
     if (!text) text = node.textContent.trim();
 
-    const badgeStr = badgeSet.size ? [...badgeSet].map(b => `[${b}]`).join('') + ' ' : '';
-    return nickname ? `${badgeStr}${nickname}_${text}` : text;
+    const prefix = isManager ? '[매니저] ' : '';
+    return nickname ? `${prefix}${nickname}_${text}` : text;
   }
 
   // ── 페이지 타입 ───────────────────────────────────────────────────────────

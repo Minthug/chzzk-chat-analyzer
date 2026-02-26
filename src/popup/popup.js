@@ -25,6 +25,7 @@ const storageBarFill      = document.getElementById('storage-bar-fill');
 const storageText         = document.getElementById('storage-text');
 const tabVolume           = document.getElementById('tab-volume');
 const tabKeyword          = document.getElementById('tab-keyword');
+const tabManager          = document.getElementById('tab-manager');
 const settingKeywordInput = document.getElementById('setting-keyword-input');
 const btnAddKeyword       = document.getElementById('btn-add-keyword');
 const keywordTagList      = document.getElementById('keyword-tag-list');
@@ -125,6 +126,11 @@ function renderSession(session) {
 
   if (activeTab === 'keyword') {
     renderKeywordSpikes(session);
+    return;
+  }
+
+  if (activeTab === 'manager') {
+    renderManagerChats(session);
     return;
   }
 
@@ -313,20 +319,41 @@ spikeList.addEventListener('input', (e) => {
   }, 800);
 });
 
-// ── 탭 전환 ───────────────────────────────────────────────────────────────────
-tabVolume.addEventListener('click', () => {
-  activeTab = 'volume';
-  tabVolume.classList.add('active');
-  tabKeyword.classList.remove('active');
-  renderSession(currentSession);
-});
+// ── 매니저 채팅 렌더링 ────────────────────────────────────────────────────────
+function renderManagerChats(session) {
+  const chats = session?.managerChats || [];
+  if (chats.length === 0) {
+    spikeList.innerHTML = '<div class="empty-msg">감지된 매니저 채팅이 없습니다.</div>';
+    return;
+  }
+  spikeList.innerHTML = chats.map(c => `
+    <div class="manager-chat-item" data-sec="${c.startSec ?? ''}">
+      <span class="manager-chat-time">${c.hms}</span>
+      <span class="manager-chat-nick">${c.nickname}</span>
+      <span class="manager-chat-text">${c.text}</span>
+    </div>
+  `).join('');
 
-tabKeyword.addEventListener('click', () => {
-  activeTab = 'keyword';
-  tabKeyword.classList.add('active');
-  tabVolume.classList.remove('active');
+  spikeList.querySelectorAll('.manager-chat-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const sec = parseFloat(el.dataset.sec);
+      if (!isNaN(sec)) bgMessage({ type: 'SEEK_TO', sec, pageId: currentPageId });
+    });
+  });
+}
+
+// ── 탭 전환 ───────────────────────────────────────────────────────────────────
+function setActiveTab(tab) {
+  activeTab = tab;
+  tabVolume.classList.toggle('active',  tab === 'volume');
+  tabKeyword.classList.toggle('active', tab === 'keyword');
+  tabManager.classList.toggle('active', tab === 'manager');
   renderSession(currentSession);
-});
+}
+
+tabVolume.addEventListener('click',  () => setActiveTab('volume'));
+tabKeyword.addEventListener('click', () => setActiveTab('keyword'));
+tabManager.addEventListener('click', () => setActiveTab('manager'));
 
 // ── 키워드 관리 ───────────────────────────────────────────────────────────────
 function renderKeywordTags() {

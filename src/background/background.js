@@ -46,6 +46,7 @@ function getSession(pageId) {
       totalMessages: 0,
       channelName: null,
       liveTitle: null,
+      managerChats: [],
       // Keyword spikes
       keywordSpikes: [],
       keywordState: {},  // { [keyword]: { currentCount, currentWindowIndex, currentWindowStartSec, currentWindowStartMs, windows[] } }
@@ -304,6 +305,25 @@ function handleChatMessage(msg) {
   // Keyword processing
   processKeywords(session, msg.texts || [], msg);
 
+  // 매니저 채팅 수집
+  for (const t of (msg.texts || [])) {
+    if (!t.startsWith('[매니저]')) continue;
+    const withoutBadge = t.slice('[매니저] '.length);
+    const underIdx = withoutBadge.indexOf('_');
+    const nickname = underIdx > 0 ? withoutBadge.slice(0, underIdx) : '';
+    const text     = underIdx > 0 ? withoutBadge.slice(underIdx + 1) : withoutBadge;
+    const hms = msg.pageType === 'vod'
+      ? secToHMS(Math.floor(msg.videoTimestamp || 0))
+      : new Date(msg.wallTimestamp).toLocaleTimeString('ko-KR');
+    session.managerChats.push({
+      hms,
+      startSec: msg.pageType === 'vod' ? Math.floor(msg.videoTimestamp || 0) : null,
+      nickname,
+      text,
+    });
+    if (session.managerChats.length > 300) session.managerChats.shift();
+  }
+
   // Persist to session storage
   persistSession(session);
 }
@@ -339,6 +359,7 @@ function persistSession(session) {
         totalMessages: session.totalMessages,
         channelName: session.channelName || null,
         liveTitle: session.liveTitle || null,
+        managerChats: session.managerChats || [],
       };
       try {
         await chrome.storage.local.set({ [STORAGE_KEY]: existing });

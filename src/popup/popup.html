@@ -194,6 +194,35 @@
     .spike-memo-wrap.has-memo .spike-memo { color: #99aac8; }
     .spike-memo-wrap.has-memo .spike-memo-icon { color: #4a6fa5; }
 
+    .manager-chat-item {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      padding: 5px 4px;
+      border-bottom: 1px solid #1a1a2e;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.1s;
+    }
+    .manager-chat-item:hover { background: #1e2a3a; }
+    .manager-chat-time {
+      font-size: 11px;
+      color: #e67e22;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .manager-chat-nick {
+      font-size: 11px;
+      color: #5dade2;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .manager-chat-text {
+      font-size: 12px;
+      color: #ccc;
+      word-break: break-all;
+    }
+
     .empty-msg {
       color: #555;
       text-align: center;
@@ -368,6 +397,7 @@
       <div class="spike-tabs">
         <button class="spike-tab active" id="tab-volume">볼륨</button>
         <button class="spike-tab" id="tab-keyword">키워드</button>
+        <button class="spike-tab" id="tab-manager">매니저</button>
       </div>
     </div>
     <div class="spike-list" id="spike-list">
