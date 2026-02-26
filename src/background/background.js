@@ -332,6 +332,8 @@ function persistSession(session) {
         spikes: session.spikes,
         keywordSpikes: session.keywordSpikes,
         totalMessages: session.totalMessages,
+        channelName: session.channelName || null,
+        liveTitle: session.liveTitle || null,
       };
       try {
         await chrome.storage.local.set({ [STORAGE_KEY]: existing });
@@ -455,7 +457,11 @@ async function clearSession(pageId) {
     const stored = existing[pageId];
 
     // 스파이크가 있으면 초기화 전에 자동 내보내기
+    // in-memory 세션에 최신 channelName/liveTitle이 있으면 덮어쓰기
     if (stored && (stored.spikes?.length > 0 || stored.keywordSpikes?.length > 0)) {
+      const mem = sessions[pageId];
+      if (mem?.channelName) stored.channelName = mem.channelName;
+      if (mem?.liveTitle)   stored.liveTitle   = mem.liveTitle;
       await autoExport(stored);
     }
 
@@ -587,6 +593,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'GET_SESSION_DATA': {
       chrome.storage.local.get(STORAGE_KEY).then((result) => {
         const data = (result[STORAGE_KEY] || {})[msg.pageId] || null;
+        // in-memory에 최신 channelName/liveTitle이 있으면 덮어쓰기
+        if (data) {
+          const mem = sessions[msg.pageId];
+          if (mem?.channelName) data.channelName = mem.channelName;
+          if (mem?.liveTitle)   data.liveTitle   = mem.liveTitle;
+        }
         sendResponse({ data });
       });
       return true; // async response
