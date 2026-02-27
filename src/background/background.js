@@ -604,6 +604,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
     }
 
+    case 'STREAM_ELAPSED': {
+      // 라이브 방송 경과 시간 DOM 폴링으로 확인된 시점에 startedAt 보정
+      const session = sessions[msg.pageId];
+      if (session && session.pageType === 'live') {
+        session.startedAt = msg.timestamp - msg.streamElapsedSec * 1000;
+        console.log('[chzzk-analyzer] startedAt corrected via STREAM_ELAPSED:', msg.streamElapsedSec, 's');
+      }
+      break;
+    }
+
     case 'WS_CLOSE':
       console.log('[chzzk-analyzer] WebSocket closed for:', msg.pageId);
       {

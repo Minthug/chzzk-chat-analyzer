@@ -268,14 +268,38 @@ function getPageType() {
     INFO('DOM observer started on', container.className);
 
     const wsPageType = getPageType();
+    const wsPageId = getPageId();
     safeSend({
       type: 'WS_OPEN',
       pageType: wsPageType,
-      pageId: getPageId(),
+      pageId: wsPageId,
       url: 'dom-observer',
       timestamp: Date.now(),
       streamElapsedSec: wsPageType === 'live' ? getLiveStreamElapsedSec() : null,
     });
+
+    // 라이브: video_information_count 요소가 늦게 렌더링될 수 있으므로
+    // 요소가 나타날 때까지 폴링하다가 발견하면 보정 메시지 전송
+    if (wsPageType === 'live') {
+      let attempts = 0;
+      const pollTimer = setInterval(() => {
+        attempts++;
+        const elapsed = getLiveStreamElapsedSec();
+        if (elapsed != null) {
+          clearInterval(pollTimer);
+          safeSend({
+            type: 'STREAM_ELAPSED',
+            pageId: wsPageId,
+            streamElapsedSec: elapsed,
+            timestamp: Date.now(),
+          });
+          INFO('Stream elapsed synced:', elapsed, 's');
+        } else if (attempts >= 20) {
+          // 10초(500ms * 20) 동안 못 찾으면 포기
+          clearInterval(pollTimer);
+        }
+      }, 500);
+    }
   }
 
   // ── 컨테이너 detach 감지 & 재연결 ────────────────────────────────────────
