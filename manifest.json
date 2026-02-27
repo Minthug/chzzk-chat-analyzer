@@ -14,8 +14,7 @@
 
   "host_permissions": [
     "*://*.chzzk.naver.com/*",
-    "*://api.chzzk.naver.com/*",
-    "<all_urls>"
+    "*://api.chzzk.naver.com/*"
   ],
 
   "background": {
