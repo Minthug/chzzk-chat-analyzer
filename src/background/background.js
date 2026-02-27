@@ -98,18 +98,21 @@ function flushWindow(session) {
     return;
   }
 
+  const liveElapsedSec = session.pageType === 'live'
+    ? Math.floor((session.currentWindowStartMs - session.startedAt) / 1000)
+    : null;
   const windowEntry = {
     windowIndex: session.currentWindowIndex,
     startSec: session.pageType === 'vod'
       ? session.currentWindowStartSec
-      : null,
+      : liveElapsedSec,
     startMs: session.pageType === 'live'
       ? session.currentWindowStartMs
       : null,
     count: session.currentWindowCount,
     hms: session.pageType === 'vod'
       ? secToHMS(session.currentWindowStartSec)
-      : new Date(session.currentWindowStartMs).toLocaleTimeString('ko-KR'),
+      : secToHMS(liveElapsedSec),
   };
 
   session.windows.push(windowEntry);
@@ -191,14 +194,17 @@ function flushKeywordWindow(session, keyword) {
     return;
   }
 
+  const kwLiveElapsedSec = session.pageType === 'live'
+    ? Math.floor((ks.currentWindowStartMs - session.startedAt) / 1000)
+    : null;
   const windowEntry = {
     windowIndex: ks.currentWindowIndex,
-    startSec: session.pageType === 'vod'  ? ks.currentWindowStartSec : null,
+    startSec: session.pageType === 'vod'  ? ks.currentWindowStartSec : kwLiveElapsedSec,
     startMs:  session.pageType === 'live' ? ks.currentWindowStartMs  : null,
     count:    ks.currentCount,
     hms:      session.pageType === 'vod'
       ? secToHMS(ks.currentWindowStartSec)
-      : new Date(ks.currentWindowStartMs).toLocaleTimeString('ko-KR'),
+      : secToHMS(kwLiveElapsedSec),
   };
 
   ks.windows.push(windowEntry);
@@ -312,12 +318,15 @@ function handleChatMessage(msg) {
     const underIdx = withoutBadge.indexOf('_');
     const nickname = underIdx > 0 ? withoutBadge.slice(0, underIdx) : '';
     const text     = underIdx > 0 ? withoutBadge.slice(underIdx + 1) : withoutBadge;
+    const managerElapsedSec = msg.pageType === 'live'
+      ? Math.floor((msg.wallTimestamp - session.startedAt) / 1000)
+      : null;
     const hms = msg.pageType === 'vod'
       ? secToHMS(Math.floor(msg.videoTimestamp || 0))
-      : new Date(msg.wallTimestamp).toLocaleTimeString('ko-KR');
+      : secToHMS(managerElapsedSec);
     session.managerChats.push({
       hms,
-      startSec: msg.pageType === 'vod' ? Math.floor(msg.videoTimestamp || 0) : null,
+      startSec: msg.pageType === 'vod' ? Math.floor(msg.videoTimestamp || 0) : managerElapsedSec,
       nickname,
       text,
     });
