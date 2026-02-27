@@ -376,7 +376,12 @@ function persistSession(session) {
         if (e.message?.includes('QUOTA_BYTES')) {
           // 용량 초과 → 모든 세션에서 썸네일 제거 후 재시도
           stripThumbnails(existing);
+          // 메모리 세션도 함께 정리 (안 하면 다음 persist 때 또 포함되어 무한 실패)
+          for (const pid of Object.keys(sessions)) {
+            for (const spike of sessions[pid].spikes || []) delete spike.thumbnail;
+          }
           await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+          console.warn('[chzzk-analyzer] Storage quota exceeded: all thumbnails removed.');
         } else {
           throw e;
         }
@@ -681,7 +686,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'CAPTURE_REQUEST': {
       // canvas.toDataURL()이 CDN CORS로 막히므로
       // captureVisibleTab으로 탭 전체 캡처 → OffscreenCanvas로 비디오 영역 crop
-      if (!sender.tab?.active) break; // 탭이 숨겨진 경우 스킵
+      if (!sender.tab?.windowId) break;
       (async () => {
         try {
           const dataUrl = await chrome.tabs.captureVisibleTab(sender.tab.windowId, {
@@ -718,8 +723,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               persistSession(session);
             }
           }
-        } catch (_) {
-          // 탭 비활성화 등 캡처 불가 시 조용히 무시
+        } catch (e) {
+          console.warn('[chzzk-analyzer] Thumbnail capture failed:', e?.message);
         }
       })();
       break;
