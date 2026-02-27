@@ -279,13 +279,14 @@ function getPageType() {
     });
 
     // 라이브: video_information_count 요소가 늦게 렌더링될 수 있으므로
-    // 요소가 나타날 때까지 폴링하다가 발견하면 보정 메시지 전송
+    // 찾을 때까지 계속 폴링 (제한 없음)
     if (wsPageType === 'live') {
-      let attempts = 0;
+      let synced = false;
       const pollTimer = setInterval(() => {
-        attempts++;
+        if (synced) return;
         const elapsed = getLiveStreamElapsedSec();
         if (elapsed != null) {
+          synced = true;
           clearInterval(pollTimer);
           safeSend({
             type: 'STREAM_ELAPSED',
@@ -294,11 +295,8 @@ function getPageType() {
             timestamp: Date.now(),
           });
           INFO('Stream elapsed synced:', elapsed, 's');
-        } else if (attempts >= 20) {
-          // 10초(500ms * 20) 동안 못 찾으면 포기
-          clearInterval(pollTimer);
         }
-      }, 500);
+      }, 1000);
     }
   }
 
