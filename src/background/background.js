@@ -580,6 +580,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const openSession = getSession(msg.pageId);
       openSession.pageType = msg.pageType;
 
+      // 라이브 방송: DOM에서 읽은 경과 시간으로 startedAt 역산
+      if (msg.pageType === 'live' && msg.streamElapsedSec != null) {
+        openSession.startedAt = msg.timestamp - msg.streamElapsedSec * 1000;
+        console.log('[chzzk-analyzer] Live startedAt adjusted by streamElapsedSec:', msg.streamElapsedSec, 's');
+      }
+
       // 즉시 폴백: 탭 타이틀 파싱
       const tabMeta = parseTabTitle(sender.tab?.title);
       if (tabMeta.channelName) openSession.channelName = tabMeta.channelName;

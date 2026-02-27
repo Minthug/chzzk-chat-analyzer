@@ -60,6 +60,20 @@
     return nickname ? `${prefix}${nickname}_${text}` : text;
   }
 
+  // ── 라이브 방송 경과 시간 읽기 ────────────────────────────────────────────
+  function getLiveStreamElapsedSec() {
+    // "00:53:37 스트리밍 중" 형태의 span 탐색
+    const spans = document.querySelectorAll('[class*="video_information_count__"]');
+    for (const span of spans) {
+      const text = span.textContent?.trim() || '';
+      const match = text.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*스트리밍/);
+      if (match) {
+        return parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseInt(match[3]);
+      }
+    }
+    return null;
+  }
+
   // ── 페이지 타입 ───────────────────────────────────────────────────────────
 function getPageType() {
     const path = window.location.pathname;
@@ -253,12 +267,14 @@ function getPageType() {
     chatObserver.observe(container, { childList: true, subtree: true });
     INFO('DOM observer started on', container.className);
 
+    const wsPageType = getPageType();
     safeSend({
       type: 'WS_OPEN',
-      pageType: getPageType(),
+      pageType: wsPageType,
       pageId: getPageId(),
       url: 'dom-observer',
       timestamp: Date.now(),
+      streamElapsedSec: wsPageType === 'live' ? getLiveStreamElapsedSec() : null,
     });
   }
 
