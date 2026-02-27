@@ -89,6 +89,33 @@ function secToHMS(sec) {
   return [h, m, ss].map((n) => String(n).padStart(2, '0')).join(':');
 }
 
+// ── 라이브 startedAt 보정 + 기존 스파이크 hms/startSec 재계산 ─────────────────
+function correctLiveStartedAt(session, newStartedAt) {
+  if (!session || session.pageType !== 'live') return;
+  session.startedAt = newStartedAt;
+  // 기존에 잘못 기록된 스파이크 타임스탬프 재계산
+  for (const spike of session.spikes || []) {
+    if (spike.startMs != null) {
+      const elapsedSec = Math.floor((spike.startMs - newStartedAt) / 1000);
+      spike.startSec = elapsedSec;
+      spike.hms = secToHMS(elapsedSec);
+    }
+  }
+  for (const spike of session.keywordSpikes || []) {
+    if (spike.startMs != null) {
+      const elapsedSec = Math.floor((spike.startMs - newStartedAt) / 1000);
+      spike.startSec = elapsedSec;
+      spike.hms = secToHMS(elapsedSec);
+    }
+  }
+  for (const chat of session.managerChats || []) {
+    if (chat.wallMs != null) {
+      chat.hms = secToHMS(Math.floor((chat.wallMs - newStartedAt) / 1000));
+    }
+  }
+  console.log('[chzzk-analyzer] startedAt corrected to:', new Date(newStartedAt).toISOString());
+}
+
 // ── Flush current window into windows array ───────────────────────────────────
 function flushWindow(session) {
   if (session.currentWindowCount === 0) {
@@ -327,6 +354,7 @@ function handleChatMessage(msg) {
     session.managerChats.push({
       hms,
       startSec: msg.pageType === 'vod' ? Math.floor(msg.videoTimestamp || 0) : managerElapsedSec,
+      wallMs: msg.pageType === 'live' ? msg.wallTimestamp : null,
       nickname,
       text,
     });
@@ -411,14 +439,18 @@ async function fetchPageMeta(pageId, pageType) {
     if (!content) return null;
 
     if (pageType === 'live') {
+      // openDate: 방송 시작 시각 (e.g. "2026-02-27 14:30:00")
+      const openDate = content.openDate || content.liveOpenDate || null;
       return {
         channelName: content.channel?.channelName || null,
         liveTitle: content.liveTitle || null,
+        liveStartedAt: openDate ? new Date(openDate).getTime() : null,
       };
     } else {
       return {
         channelName: content.channel?.channelName || null,
         liveTitle: content.videoTitle || null,
+        liveStartedAt: null,
       };
     }
   } catch (e) {
@@ -585,12 +617,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const openSession = getSession(msg.pageId);
       openSession.pageType = msg.pageType;
 
-      // 라이브 방송: DOM에서 읽은 경과 시간으로 startedAt 역산
-      if (msg.pageType === 'live' && msg.streamElapsedSec != null) {
-        openSession.startedAt = msg.timestamp - msg.streamElapsedSec * 1000;
-        console.log('[chzzk-analyzer] Live startedAt adjusted by streamElapsedSec:', msg.streamElapsedSec, 's');
-      }
-
       // 즉시 폴백: 탭 타이틀 파싱
       const tabMeta = parseTabTitle(sender.tab?.title);
       if (tabMeta.channelName) openSession.channelName = tabMeta.channelName;
@@ -602,7 +628,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!s || !meta) return;
         if (meta.channelName) s.channelName = meta.channelName;
         if (meta.liveTitle)   s.liveTitle   = meta.liveTitle;
-        console.log('[chzzk-analyzer] Page meta:', meta.channelName, '|', meta.liveTitle);
+        // API에서 방송 시작 시각을 가져온 경우 startedAt 보정 (가장 정확)
+        if (meta.liveStartedAt) correctLiveStartedAt(s, meta.liveStartedAt);
+        console.log('[chzzk-analyzer] Page meta:', meta.channelName, '|', meta.liveTitle, '| startedAt:', meta.liveStartedAt);
       });
 
       restoreSession(msg.pageId, msg.pageType); // 이전 세션 복원
@@ -610,11 +638,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     case 'STREAM_ELAPSED': {
-      // 라이브 방송 경과 시간 DOM 폴링으로 확인된 시점에 startedAt 보정
+      // 라이브 방송 경과 시간 DOM 폴링으로 확인된 시점에 startedAt 보정 (API 보정이 없을 때 폴백)
       const session = sessions[msg.pageId];
       if (session && session.pageType === 'live') {
-        session.startedAt = msg.timestamp - msg.streamElapsedSec * 1000;
-        console.log('[chzzk-analyzer] startedAt corrected via STREAM_ELAPSED:', msg.streamElapsedSec, 's');
+        const newStartedAt = msg.timestamp - msg.streamElapsedSec * 1000;
+        correctLiveStartedAt(session, newStartedAt);
       }
       break;
     }
