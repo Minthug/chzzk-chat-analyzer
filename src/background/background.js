@@ -558,6 +558,30 @@ async function clearSession(pageId) {
   delete sessions[pageId];
 }
 
+// ── 내보내기만 하고 세션 데이터는 보존 (다른 방송으로 이동 시) ──────────────
+// clearSession과 달리 storage의 데이터를 삭제하지 않아 돌아왔을 때 스파이크 복원 가능
+async function exportAndKeepSession(pageId) {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const existing = result[STORAGE_KEY] || {};
+    const stored = existing[pageId];
+
+    if (stored && (stored.spikes?.length > 0 || stored.keywordSpikes?.length > 0)) {
+      const mem = sessions[pageId];
+      if (mem?.channelName) stored.channelName = mem.channelName;
+      if (mem?.liveTitle)   stored.liveTitle   = mem.liveTitle;
+      // storage에 channelName/liveTitle 업데이트 반영
+      existing[pageId] = stored;
+      await chrome.storage.local.set({ [STORAGE_KEY]: existing });
+      await autoExport(stored);
+    }
+  } catch (e) {
+    console.error('[chzzk-analyzer] Failed to export session:', e);
+  }
+  // in-memory만 제거 (tracking state 초기화)
+  delete sessions[pageId];
+}
+
 // ── Get settings ─────────────────────────────────────────────────────────────
 async function getSettings() {
   const result = await chrome.storage.sync.get({
@@ -650,6 +674,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (meta.liveTitle)   s.liveTitle   = meta.liveTitle;
         // API에서 방송 시작 시각을 가져온 경우 startedAt 보정 (가장 정확)
         if (meta.liveStartedAt) correctLiveStartedAt(s, meta.liveStartedAt);
+        // channelName/liveTitle을 즉시 storage에 반영 (파일명 버그 방지)
+        // 채팅 메시지가 없어도 저장 보장
+        persistSession(s);
         console.log('[chzzk-analyzer] Page meta:', meta.channelName, '|', meta.liveTitle, '| startedAt:', meta.liveStartedAt);
       });
 
@@ -686,9 +713,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       if (tabId) tabPageMap[tabId] = newPageId;
 
-      // 다른 영상/방송으로 이동 시 이전 세션 자동 초기화
+      // 다른 영상/방송으로 이동 시 내보내기 후 세션 데이터 보존
+      // (돌아왔을 때 스파이크 복원 가능하도록 storage는 삭제하지 않음)
       if (oldPageId && oldPageId !== newPageId) {
-        clearSession(oldPageId);
+        exportAndKeepSession(oldPageId);
       }
       console.log('[chzzk-analyzer] Navigation to:', msg.pageType, newPageId);
       break;
