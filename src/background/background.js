@@ -116,6 +116,14 @@ function correctLiveStartedAt(session, newStartedAt) {
     }
   }
   console.log('[chzzk-analyzer] startedAt corrected to:', new Date(newStartedAt).toISOString());
+  // 팝업이 열려 있으면 갱신된 타임스탬프를 즉시 반영
+  notifyTabs(session.pageId, {
+    type: 'STATS_UPDATE',
+    windows: session.windows.slice(-50),
+    spikes: session.spikes,
+    keywordSpikes: session.keywordSpikes,
+    totalMessages: session.totalMessages,
+  });
 }
 
 // ── Flush current window into windows array ───────────────────────────────────
@@ -623,6 +631,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       console.log('[chzzk-analyzer] WebSocket opened:', msg.url, 'pageType:', msg.pageType);
       const openSession = getSession(msg.pageId);
       openSession.pageType = msg.pageType;
+
+      // WS_OPEN 시점에 DOM에서 바로 읽힌 경우 즉시 보정
+      if (msg.pageType === 'live' && msg.streamElapsedSec != null) {
+        correctLiveStartedAt(openSession, msg.timestamp - msg.streamElapsedSec * 1000);
+      }
 
       // 즉시 폴백: 탭 타이틀 파싱
       const tabMeta = parseTabTitle(sender.tab?.title);
