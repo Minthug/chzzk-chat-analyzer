@@ -57,8 +57,8 @@ function getSession(pageId) {
 }
 
 // ── Z-Score spike detection ──────────────────────────────────────────────────
-function detectSpike(windows, zThreshold = Z_THRESH) {
-  if (windows.length < 2) return { isSpike: false, zScore: 0, mean: 0, std: 0 };
+function detectSpike(windows, zThreshold = Z_THRESH, minWindows = 2) {
+  if (windows.length < minWindows) return { isSpike: false, zScore: 0, mean: 0, std: 0 };
 
   const lag = Math.min(LAG_WINDOWS, windows.length - 1);
   const baseline = windows.slice(-lag - 1, -1); // last LAG_WINDOWS (excluding current)
@@ -239,7 +239,9 @@ function flushKeywordWindow(session, keyword) {
   ks.windows.push(windowEntry);
   if (ks.windows.length > 20) ks.windows = ks.windows.slice(-20);
 
-  const result = detectSpike(ks.windows);
+  // 키워드는 빈 윈도우를 건너뛰므로 베이스라인이 부족할 때 오탐 방지
+  // LAG_WINDOWS+1개 이상 쌓인 후 감지 시작
+  const result = detectSpike(ks.windows, Z_THRESH, LAG_WINDOWS + 1);
   if (result.isSpike) {
     const spike = {
       keyword,
