@@ -34,6 +34,7 @@ function getSession(pageId) {
       pageId,
       pageType: 'unknown',
       startedAt: Date.now(),
+      startedAtCorrected: false,
       // Array of { windowIndex, startSec, count }
       windows: [],
       // Current accumulating window
@@ -93,6 +94,7 @@ function secToHMS(sec) {
 function correctLiveStartedAt(session, newStartedAt) {
   if (!session || session.pageType !== 'live') return;
   session.startedAt = newStartedAt;
+  session.startedAtCorrected = true; // restoreSession이 덮어쓰지 못하도록 표시
   // 기존에 잘못 기록된 스파이크 타임스탬프 재계산
   for (const spike of session.spikes || []) {
     if (spike.startMs != null) {
@@ -579,7 +581,10 @@ async function restoreSession(pageId, pageType) {
     session.spikes        = stored.spikes        || [];
     session.keywordSpikes = stored.keywordSpikes || [];
     session.totalMessages = stored.totalMessages || 0;
-    session.startedAt     = stored.startedAt     || session.startedAt;
+    // 이미 보정된 경우(STREAM_ELAPSED 또는 API) 덮어쓰지 않음
+    if (!session.startedAtCorrected) {
+      session.startedAt = stored.startedAt || session.startedAt;
+    }
     session.pageType      = pageType             || stored.pageType || 'unknown';
     session.keywordState  = {};
 
