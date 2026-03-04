@@ -281,13 +281,13 @@ function getPageType() {
     // 라이브: video_information_count 요소가 늦게 렌더링될 수 있으므로
     // 찾을 때까지 계속 폴링 (제한 없음)
     if (wsPageType === 'live') {
-      let synced = false;
-      const pollTimer = setInterval(() => {
-        if (synced) return;
+      // 이전 polling이 남아있으면 정리
+      if (streamElapsedTimer) { clearInterval(streamElapsedTimer); streamElapsedTimer = null; }
+      streamElapsedTimer = setInterval(() => {
         const elapsed = getLiveStreamElapsedSec();
         if (elapsed != null) {
-          synced = true;
-          clearInterval(pollTimer);
+          clearInterval(streamElapsedTimer);
+          streamElapsedTimer = null;
           safeSend({
             type: 'STREAM_ELAPSED',
             pageId: wsPageId,
@@ -310,6 +310,9 @@ function getPageType() {
       tryMount();
     }
   }, 2000);
+
+  // ── 라이브 경과 시간 polling 인터벌 참조 (네비게이션 시 정리용) ─────────────
+  let streamElapsedTimer = null;
 
   // ── 컨테이너 탐색 & 재시도 ────────────────────────────────────────────────
   let mountTimer = null;
@@ -382,7 +385,13 @@ function getPageType() {
       overlayInjected = false;
       if (chatObserver) { chatObserver.disconnect(); chatObserver = null; }
       if (mountTimer) { clearTimeout(mountTimer); mountTimer = null; }
+      // 이전 방송의 라이브 경과 시간 polling 정리
+      if (streamElapsedTimer) { clearInterval(streamElapsedTimer); streamElapsedTimer = null; }
       observedContainer = null;
+      // 이전 방송의 미전송 채팅 버퍼 초기화 (새 방송에 섞이지 않도록)
+      pendingCount = 0;
+      pendingTexts = [];
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
       safeSend({
         type: 'PAGE_NAVIGATE',
         pageType: getPageType(),

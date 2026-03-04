@@ -114,7 +114,8 @@ function renderSession(session) {
   });
   setStatus(`저장됨 · 분석 시작: ${savedAt}`);
 
-  if (session.spikes.length > 0) {
+  const hasData = session.spikes.length > 0 || (session.keywordSpikes?.length > 0);
+  if (hasData) {
     spikeBadge.classList.add('visible');
     btnTxt.disabled = false;
     btnCsv.disabled = false;

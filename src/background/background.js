@@ -620,6 +620,9 @@ async function restoreSession(pageId, pageType) {
       session.startedAt = stored.startedAt || session.startedAt;
     }
     session.pageType      = pageType             || stored.pageType || 'unknown';
+    // channelName/liveTitle 복원 (파일명 버그 방지: fetchPageMeta 전에 이동해도 이름 유지)
+    if (stored.channelName && !session.channelName) session.channelName = stored.channelName;
+    if (stored.liveTitle   && !session.liveTitle)   session.liveTitle   = stored.liveTitle;
     session.keywordState  = {};
 
     // 윈도우 추적 상태 초기화 (서비스 워커가 살아있을 때 이전 값이 남아있으면
