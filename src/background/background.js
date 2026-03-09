@@ -7,18 +7,20 @@
 let WINDOW_SIZE_SEC  = 30;    // 팝업 설정에서 로드됨
 let Z_THRESH         = 3.0;   // 팝업 설정에서 로드됨
 let SAVE_THUMBNAIL   = true;  // 썸네일 자동 캡처 여부
+let AUTO_EXPORT      = true;  // 방송 이동/종료 시 TXT 자동 저장 여부
 let KEYWORDS         = [];    // 키워드 감지 목록
 const LAG_WINDOWS    = 10;
 const DEFAULT_Z_THRESH  = 3.0;
 const STORAGE_KEY    = 'chzzk_analyzer_session';
 
 // 서비스 워커 시작 시 사용자 설정 로드
-chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, keywords: [] }, (s) => {
+chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, keywords: [] }, (s) => {
   Z_THRESH        = s.zThreshold;
   WINDOW_SIZE_SEC = s.windowSize;
   SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
+  AUTO_EXPORT     = s.autoExport    ?? true;
   KEYWORDS        = s.keywords || [];
-  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, KEYWORDS });
+  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, AUTO_EXPORT, KEYWORDS });
 });
 
 // ── In-memory state ──────────────────────────────────────────────────────────
@@ -540,9 +542,8 @@ async function clearSession(pageId) {
     const existing = result[STORAGE_KEY] || {};
     const stored = existing[pageId];
 
-    // 스파이크가 있으면 초기화 전에 자동 내보내기
-    // in-memory 세션에 최신 channelName/liveTitle이 있으면 덮어쓰기
-    if (stored && (stored.spikes?.length > 0 || stored.keywordSpikes?.length > 0)) {
+    // 스파이크가 있으면 초기화 전에 자동 내보내기 (설정 OFF 시 스킵)
+    if (AUTO_EXPORT && stored && (stored.spikes?.length > 0 || stored.keywordSpikes?.length > 0)) {
       const mem = sessions[pageId];
       if (mem?.channelName) stored.channelName = mem.channelName;
       if (mem?.liveTitle)   stored.liveTitle   = mem.liveTitle;
@@ -573,7 +574,8 @@ async function exportAndKeepSession(pageId) {
       // storage에 channelName/liveTitle 업데이트 반영
       existing[pageId] = stored;
       await chrome.storage.local.set({ [STORAGE_KEY]: existing });
-      await autoExport(stored);
+      // 자동 저장 설정이 켜진 경우에만 내보내기
+      if (AUTO_EXPORT) await autoExport(stored);
     }
   } catch (e) {
     console.error('[chzzk-analyzer] Failed to export session:', e);
@@ -588,6 +590,7 @@ async function getSettings() {
     zThreshold: DEFAULT_Z_THRESH,
     windowSize: WINDOW_SIZE_SEC,
     saveThumbnail: true,
+    autoExport: true,
     keywords: [],
   });
   return result;
@@ -870,9 +873,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'SAVE_SETTINGS': {
       chrome.storage.sync.set(msg.settings).then(() => {
         // 저장 즉시 메모리에 반영
-        if (msg.settings.zThreshold   !== undefined) Z_THRESH        = msg.settings.zThreshold;
-        if (msg.settings.windowSize   !== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
-        if (msg.settings.saveThumbnail !== undefined) SAVE_THUMBNAIL = msg.settings.saveThumbnail;
+        if (msg.settings.zThreshold    !== undefined) Z_THRESH        = msg.settings.zThreshold;
+        if (msg.settings.windowSize    !== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
+        if (msg.settings.saveThumbnail !== undefined) SAVE_THUMBNAIL  = msg.settings.saveThumbnail;
+        if (msg.settings.autoExport    !== undefined) AUTO_EXPORT     = msg.settings.autoExport;
         if (msg.settings.keywords      !== undefined) KEYWORDS        = msg.settings.keywords;
         sendResponse({ ok: true });
       });

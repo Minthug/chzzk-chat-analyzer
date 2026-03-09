@@ -19,6 +19,7 @@ const btnClear    = document.getElementById('btn-clear');
 const settingZ            = document.getElementById('setting-z');
 const settingWin          = document.getElementById('setting-window');
 const settingThumbnail    = document.getElementById('setting-thumbnail');
+const settingAutoExport   = document.getElementById('setting-auto-export');
 const btnSave             = document.getElementById('btn-save-settings');
 const btnClearThumbs      = document.getElementById('btn-clear-thumbnails');
 const storageBarFill      = document.getElementById('storage-bar-fill');
@@ -41,6 +42,7 @@ async function init() {
     settingZ.value             = res.settings.zThreshold   ?? 3.0;
     settingWin.value           = res.settings.windowSize   ?? 30;
     settingThumbnail.checked   = res.settings.saveThumbnail ?? true;
+    settingAutoExport.checked  = res.settings.autoExport   ?? true;
     currentKeywords            = res.settings.keywords     ?? [];
     renderKeywordTags();
   }
@@ -284,7 +286,12 @@ btnSave.addEventListener('click', async () => {
   if (isNaN(z) || isNaN(w)) return;
   await bgMessage({
     type: 'SAVE_SETTINGS',
-    settings: { zThreshold: z, windowSize: w, saveThumbnail: settingThumbnail.checked },
+    settings: {
+      zThreshold:   z,
+      windowSize:   w,
+      saveThumbnail: settingThumbnail.checked,
+      autoExport:   settingAutoExport.checked,
+    },
   });
   setStatus('설정 저장됨');
 });
