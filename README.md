@@ -281,3 +281,9 @@ chzzk-chat-analyzer/
 │       └── popup.js
 └── icons/icon128.png
 ```
+
+## 라이선스
+
+MIT License © 2026 [minthug](https://github.com/Minthug)
+
+자유롭게 사용·수정·배포할 수 있으나, 원작자 표기(저작권 고지 포함)는 반드시 유지해야 합니다.
