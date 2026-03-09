@@ -37,6 +37,7 @@ function getSession(pageId) {
       pageType: 'unknown',
       startedAt: Date.now(),
       startedAtCorrected: false,
+      restoredFromStorage: false, // restoreSession이 이미 실행됐으면 재실행 방지
       // Array of { windowIndex, startSec, count }
       windows: [],
       // Current accumulating window
@@ -612,6 +613,13 @@ async function restoreSession(pageId, pageType) {
     if (!stored || !sessions[pageId]) return;
 
     const session = sessions[pageId];
+
+    // 이미 복원했으면 스킵 (DOM 재마운트로 WS_OPEN이 재발송될 때 windows 리셋 방지)
+    if (session.restoredFromStorage) {
+      console.log('[chzzk-analyzer] Session already restored, skipping (reconnect)');
+      return;
+    }
+    session.restoredFromStorage = true;
 
     // 스파이크 기록만 복원 (윈도우는 복원하지 않음)
     // → 윈도우를 복원하면 기준선 계산이 꼬여서 새 스파이크를 못 잡음
