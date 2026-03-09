@@ -608,18 +608,23 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // ── 이전 세션 복원 ────────────────────────────────────────────────────────────
 async function restoreSession(pageId, pageType) {
   try {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    const stored = (result[STORAGE_KEY] || {})[pageId];
-    if (!stored || !sessions[pageId]) return;
+    if (!sessions[pageId]) return;
 
     const session = sessions[pageId];
 
-    // 이미 복원했으면 스킵 (DOM 재마운트로 WS_OPEN이 재발송될 때 windows 리셋 방지)
+    // 이미 복원 시도했으면 스킵 (DOM 재마운트로 WS_OPEN이 재발송될 때 windows 리셋 방지)
+    // stored 유무와 관계없이 먼저 설정해야 함:
+    // stored가 없을 때 early return하면 플래그가 false로 남아 다음 DOM 재마운트 시
+    // persistSession이 저장한 데이터로 restore가 재실행되어 windows가 리셋됨
     if (session.restoredFromStorage) {
       console.log('[chzzk-analyzer] Session already restored, skipping (reconnect)');
       return;
     }
     session.restoredFromStorage = true;
+
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const stored = (result[STORAGE_KEY] || {})[pageId];
+    if (!stored) return;
 
     // 스파이크 기록만 복원 (윈도우는 복원하지 않음)
     // → 윈도우를 복원하면 기준선 계산이 꼬여서 새 스파이크를 못 잡음
