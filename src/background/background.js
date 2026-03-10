@@ -289,10 +289,19 @@ function processKeywords(session, texts, msg) {
 
     if (msg.pageType === 'vod' && msg.videoTimestamp != null) {
       const vt = msg.videoTimestamp;
-      if (ks.currentWindowStartSec === null) {
-        ks.currentWindowStartSec = Math.floor(vt / WINDOW_SIZE_SEC) * WINDOW_SIZE_SEC;
-      }
       const expectedIdx = Math.floor(vt / WINDOW_SIZE_SEC);
+
+      // 역방향 탐색: 키워드 윈도우도 초기화
+      if (expectedIdx < ks.currentWindowIndex) {
+        ks.currentWindowIndex    = expectedIdx;
+        ks.currentCount          = 0;
+        ks.currentWindowStartSec = expectedIdx * WINDOW_SIZE_SEC;
+        ks.windows               = [];
+      }
+
+      if (ks.currentWindowStartSec === null) {
+        ks.currentWindowStartSec = expectedIdx * WINDOW_SIZE_SEC;
+      }
       while (ks.currentWindowIndex < expectedIdx) {
         flushKeywordWindow(session, keyword);
         ks.currentWindowStartSec = ks.currentWindowIndex * WINDOW_SIZE_SEC;
@@ -321,12 +330,22 @@ function handleChatMessage(msg) {
   if (msg.pageType === 'vod' && msg.videoTimestamp != null) {
     // VOD + 유효한 영상 타임스탬프: 영상 시간 기반 윈도우
     const vt = msg.videoTimestamp;
+    const expectedWindowIdx = Math.floor(vt / WINDOW_SIZE_SEC);
 
-    if (session.currentWindowStartSec === null) {
-      session.currentWindowStartSec = Math.floor(vt / WINDOW_SIZE_SEC) * WINDOW_SIZE_SEC;
+    // 역방향 탐색 감지: 현재 윈도우보다 이전 구간으로 돌아온 경우
+    // windows/keywordState 초기화 → 새 구간부터 다시 감지
+    if (expectedWindowIdx < session.currentWindowIndex) {
+      console.log('[chzzk-analyzer] VOD backward seek detected, resetting window state');
+      session.windows            = [];
+      session.currentWindowIndex = expectedWindowIdx;
+      session.currentWindowCount = 0;
+      session.currentWindowStartSec = expectedWindowIdx * WINDOW_SIZE_SEC;
+      session.keywordState       = {};
     }
 
-    const expectedWindowIdx = Math.floor(vt / WINDOW_SIZE_SEC);
+    if (session.currentWindowStartSec === null) {
+      session.currentWindowStartSec = expectedWindowIdx * WINDOW_SIZE_SEC;
+    }
 
     // 빨리감기 등으로 여러 윈도우를 건너뛴 경우 플러시
     while (session.currentWindowIndex < expectedWindowIdx) {
