@@ -179,6 +179,8 @@ function getPageType() {
 
   // ── 일시중지 상태 (서비스 워커와 독립적으로 content script에서도 관리) ──────
   let paused = false;
+  // 시작 시 storage에서 pause 상태 동기화 (서비스 워커 재시작과 무관하게 올바른 상태 유지)
+  chrome.storage.sync.get({ paused: false }, (s) => { paused = s.paused ?? false; });
 
   // ── 안전한 메시지 전송 헬퍼 ──────────────────────────────────────────────
   function safeSend(msg) {

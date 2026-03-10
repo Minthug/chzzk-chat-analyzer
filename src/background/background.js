@@ -677,10 +677,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const tabId = sender.tab?.id;
       if (tabId) tabPageMap[tabId] = msg.pageId;
       console.log('[chzzk-analyzer] WebSocket opened:', msg.url, 'pageType:', msg.pageType);
-      // 현재 pause 상태를 content script에 즉시 전달 (서비스 워커 재시작 후 동기화)
-      if (sender.tab?.id) {
-        chrome.tabs.sendMessage(sender.tab.id, { type: 'SET_PAUSED', paused: PAUSED }).catch(() => {});
-      }
       const openSession = getSession(msg.pageId);
       openSession.pageType = msg.pageType;
 
