@@ -20,6 +20,7 @@ const settingZ            = document.getElementById('setting-z');
 const settingWin          = document.getElementById('setting-window');
 const settingThumbnail    = document.getElementById('setting-thumbnail');
 const settingAutoExport   = document.getElementById('setting-auto-export');
+const btnPause            = document.getElementById('btn-pause');
 const btnSave             = document.getElementById('btn-save-settings');
 const btnClearThumbs      = document.getElementById('btn-clear-thumbnails');
 const storageBarFill      = document.getElementById('storage-bar-fill');
@@ -45,6 +46,7 @@ async function init() {
     settingAutoExport.checked  = res.settings.autoExport   ?? true;
     currentKeywords            = res.settings.keywords     ?? [];
     renderKeywordTags();
+    updatePauseBtn(res.settings.paused ?? false);
   }
 
   // Find active chzzk tab
@@ -494,6 +496,26 @@ function secToHMS(sec) {
   const ss = s % 60;
   return [h, m, ss].map((n) => String(n).padStart(2, '0')).join(':');
 }
+
+// ── 일시중지 버튼 상태 업데이트 ───────────────────────────────────────────────
+function updatePauseBtn(paused) {
+  if (paused) {
+    btnPause.textContent = '▶ 채팅 수집 재개';
+    btnPause.classList.add('paused');
+  } else {
+    btnPause.textContent = '⏸ 채팅 수집 일시중지';
+    btnPause.classList.remove('paused');
+  }
+}
+
+btnPause.addEventListener('click', async () => {
+  const res = await bgMessage({ type: 'GET_SETTINGS' });
+  const currentlyPaused = res?.settings?.paused ?? false;
+  const newPaused = !currentlyPaused;
+  await bgMessage({ type: 'SAVE_SETTINGS', settings: { paused: newPaused } });
+  updatePauseBtn(newPaused);
+  setStatus(newPaused ? '⏸ 채팅 수집 일시중지됨' : '▶ 채팅 수집 재개됨');
+});
 
 // ── Background messaging ───────────────────────────────────────────────────────
 function bgMessage(msg) {

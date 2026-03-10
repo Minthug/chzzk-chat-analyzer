@@ -272,6 +272,28 @@
       padding: 4px 6px;
       font-size: 12px;
     }
+    .btn-pause {
+      display: block;
+      width: calc(100% - 28px);
+      margin: 0 14px 6px;
+      padding: 7px;
+      background: #1a2a1a;
+      color: #4caf50;
+      border: 1px solid #2e4d2e;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .btn-pause:hover { background: #223022; }
+    .btn-pause.paused {
+      background: #2a1a1a;
+      color: #e74c3c;
+      border-color: #5a2a2a;
+    }
+    .btn-pause.paused:hover { background: #331a1a; }
     .btn-save {
       display: block;
       width: calc(100% - 28px);
@@ -449,6 +471,7 @@
       <input type="checkbox" id="setting-auto-export" checked />
       방송 이동/종료 시 TXT 자동 저장
     </label>
+    <button class="btn-pause" id="btn-pause">⏸ 채팅 수집 일시중지</button>
     <button class="btn-save" id="btn-save-settings">설정 저장</button>
     <div class="export-row" style="padding: 8px 0 0;">
       <button class="btn btn-txt" id="btn-export-txt" disabled>TXT 내보내기</button>

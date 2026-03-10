@@ -8,19 +8,21 @@ let WINDOW_SIZE_SEC  = 30;    // 팝업 설정에서 로드됨
 let Z_THRESH         = 3.0;   // 팝업 설정에서 로드됨
 let SAVE_THUMBNAIL   = true;  // 썸네일 자동 캡처 여부
 let AUTO_EXPORT      = true;  // 방송 이동/종료 시 TXT 자동 저장 여부
+let PAUSED           = false; // 채팅 수집 일시중지 여부
 let KEYWORDS         = [];    // 키워드 감지 목록
 const LAG_WINDOWS    = 10;
 const DEFAULT_Z_THRESH  = 3.0;
 const STORAGE_KEY    = 'chzzk_analyzer_session';
 
 // 서비스 워커 시작 시 사용자 설정 로드
-chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, keywords: [] }, (s) => {
+chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, paused: false, keywords: [] }, (s) => {
   Z_THRESH        = s.zThreshold;
   WINDOW_SIZE_SEC = s.windowSize;
   SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
   AUTO_EXPORT     = s.autoExport    ?? true;
+  PAUSED          = s.paused        ?? false;
   KEYWORDS        = s.keywords || [];
-  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, AUTO_EXPORT, KEYWORDS });
+  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, AUTO_EXPORT, PAUSED, KEYWORDS });
 });
 
 // ── In-memory state ──────────────────────────────────────────────────────────
@@ -311,6 +313,7 @@ function processKeywords(session, texts, msg) {
 
 // ── Handle incoming chat message ──────────────────────────────────────────────
 function handleChatMessage(msg) {
+  if (PAUSED) return; // 일시중지 중이면 수집 스킵
   const session = getSession(msg.pageId);
   session.pageType = msg.pageType;
   session.totalMessages += msg.count;
@@ -592,6 +595,7 @@ async function getSettings() {
     windowSize: WINDOW_SIZE_SEC,
     saveThumbnail: true,
     autoExport: true,
+    paused: false,
     keywords: [],
   });
   return result;
@@ -890,6 +894,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg.settings.windowSize    !== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
         if (msg.settings.saveThumbnail !== undefined) SAVE_THUMBNAIL  = msg.settings.saveThumbnail;
         if (msg.settings.autoExport    !== undefined) AUTO_EXPORT     = msg.settings.autoExport;
+        if (msg.settings.paused        !== undefined) PAUSED          = msg.settings.paused;
         if (msg.settings.keywords      !== undefined) KEYWORDS        = msg.settings.keywords;
         sendResponse({ ok: true });
       });
