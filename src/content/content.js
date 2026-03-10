@@ -177,6 +177,9 @@ function getPageType() {
     }
   }, true);
 
+  // ── 일시중지 상태 (서비스 워커와 독립적으로 content script에서도 관리) ──────
+  let paused = false;
+
   // ── 안전한 메시지 전송 헬퍼 ──────────────────────────────────────────────
   function safeSend(msg) {
     try {
@@ -217,6 +220,7 @@ function getPageType() {
   let flushTimer = null;
 
   function scheduleSend(count, texts = []) {
+    if (paused) return; // 일시중지 중이면 카운팅 자체를 막음
     pendingCount += count;
     pendingTexts.push(...texts);
     LOG('chat detected, pending:', pendingCount);
@@ -343,6 +347,12 @@ function getPageType() {
 
   // ── background / popup 메시지 처리 ───────────────────────────────────────
   chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'SET_PAUSED') {
+      paused = msg.paused;
+      INFO('Collection', paused ? 'paused' : 'resumed');
+      return;
+    }
+
     if (msg.type === 'SPIKE_UPDATE' || msg.type === 'STATS_UPDATE') {
       window.postMessage({ source: 'chzzk-analyzer-bg', ...msg }, '*');
     }

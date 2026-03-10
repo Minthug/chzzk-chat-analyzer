@@ -207,6 +207,7 @@ async function notifyTabs(pageId, message) {
   try {
     const tabs = await chrome.tabs.query({ url: '*://*.chzzk.naver.com/*' });
     for (const tab of tabs) {
+      // pageId가 null이면 모든 치지직 탭에 전송 (SET_PAUSED 등 전역 알림용)
       chrome.tabs.sendMessage(tab.id, message).catch(() => {});
     }
   } catch (_) {}
@@ -676,6 +677,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const tabId = sender.tab?.id;
       if (tabId) tabPageMap[tabId] = msg.pageId;
       console.log('[chzzk-analyzer] WebSocket opened:', msg.url, 'pageType:', msg.pageType);
+      // 현재 pause 상태를 content script에 즉시 전달 (서비스 워커 재시작 후 동기화)
+      if (sender.tab?.id) {
+        chrome.tabs.sendMessage(sender.tab.id, { type: 'SET_PAUSED', paused: PAUSED }).catch(() => {});
+      }
       const openSession = getSession(msg.pageId);
       openSession.pageType = msg.pageType;
 
@@ -888,16 +893,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     case 'SAVE_SETTINGS': {
-      chrome.storage.sync.set(msg.settings).then(() => {
-        // 저장 즉시 메모리에 반영
-        if (msg.settings.zThreshold    !== undefined) Z_THRESH        = msg.settings.zThreshold;
-        if (msg.settings.windowSize    !== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
-        if (msg.settings.saveThumbnail !== undefined) SAVE_THUMBNAIL  = msg.settings.saveThumbnail;
-        if (msg.settings.autoExport    !== undefined) AUTO_EXPORT     = msg.settings.autoExport;
-        if (msg.settings.paused        !== undefined) PAUSED          = msg.settings.paused;
-        if (msg.settings.keywords      !== undefined) KEYWORDS        = msg.settings.keywords;
-        sendResponse({ ok: true });
-      });
+      // storage 저장 전에 즉시 메모리 반영 (PAUSED는 특히 즉각 적용 필요)
+      if (msg.settings.zThreshold    !== undefined) Z_THRESH        = msg.settings.zThreshold;
+      if (msg.settings.windowSize    !== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
+      if (msg.settings.saveThumbnail !== undefined) SAVE_THUMBNAIL  = msg.settings.saveThumbnail;
+      if (msg.settings.autoExport    !== undefined) AUTO_EXPORT     = msg.settings.autoExport;
+      if (msg.settings.keywords      !== undefined) KEYWORDS        = msg.settings.keywords;
+      if (msg.settings.paused !== undefined) {
+        PAUSED = msg.settings.paused;
+        // content script에도 즉시 전파 (서비스 워커 재시작 무관하게 차단)
+        notifyTabs(null, { type: 'SET_PAUSED', paused: PAUSED });
+      }
+      chrome.storage.sync.set(msg.settings).then(() => sendResponse({ ok: true }));
       return true;
     }
   }
