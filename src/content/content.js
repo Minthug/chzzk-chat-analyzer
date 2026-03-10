@@ -191,7 +191,24 @@ function getPageType() {
     }
   }
 
+  // ── VOD 채팅 아이템에서 영상 타임스탬프 추출 ────────────────────────────
+  // 치지직 VOD 채팅에는 "00:15:32" 형태의 시간이 표시됨
+  function extractVodTimeSec(node) {
+    for (const el of node.querySelectorAll('*')) {
+      if (el.children.length > 0) continue; // 리프 노드만 확인
+      const text = el.textContent?.trim() || '';
+      const m3 = text.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+      if (m3) return +m3[1] * 3600 + +m3[2] * 60 + +m3[3];
+      const m2 = text.match(/^(\d{1,2}):(\d{2})$/);
+      if (m2) return +m2[1] * 60 + +m2[2];
+    }
+    return null;
+  }
+
   // ── 메시지 전송 ───────────────────────────────────────────────────────────
+  // VOD: 관찰 시점에 기록한 타임스탬프를 우선 사용 (배치 전송 시점 video.currentTime보다 정확)
+  let pendingVodTimeSec = null;
+
   function sendChatEvent(count, texts = []) {
     const pageType = getPageType();
     const pageId = getPageId();
@@ -199,8 +216,13 @@ function getPageType() {
 
     let videoTimestamp = null;
     if (pageType === 'vod') {
-      const video = getVideoEl();
-      videoTimestamp = video ? video.currentTime : null;
+      if (pendingVodTimeSec !== null) {
+        videoTimestamp = pendingVodTimeSec;
+        pendingVodTimeSec = null;
+      } else {
+        const video = getVideoEl();
+        videoTimestamp = video ? video.currentTime : null;
+      }
     }
 
     safeSend({
@@ -255,19 +277,42 @@ function getPageType() {
     chatObserver = new MutationObserver((mutations) => {
       let newChats = 0;
       const texts = [];
+      const isVod = getPageType() === 'vod';
+      let latestDomTimeSec = null;
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (isChatItem(node)) {
             newChats++;
             texts.push(extractChatInfo(node));
+            if (isVod) {
+              const t = extractVodTimeSec(node);
+              if (t != null) latestDomTimeSec = t;
+            }
           } else if (node.nodeType === 1) {
             const items = node.querySelectorAll(SELECTORS.chatItem.join(','));
             newChats += items.length;
-            items.forEach(item => texts.push(extractChatInfo(item)));
+            items.forEach(item => {
+              texts.push(extractChatInfo(item));
+              if (isVod) {
+                const t = extractVodTimeSec(item);
+                if (t != null) latestDomTimeSec = t;
+              }
+            });
           }
         }
       }
-      if (newChats > 0) scheduleSend(newChats, texts);
+      if (newChats > 0) {
+        // VOD: DOM 추출 타임스탬프 우선, 없으면 관찰 시점의 video.currentTime
+        if (isVod) {
+          if (latestDomTimeSec != null) {
+            pendingVodTimeSec = latestDomTimeSec;
+          } else if (pendingVodTimeSec === null) {
+            const video = getVideoEl();
+            if (video && video.currentTime > 0) pendingVodTimeSec = video.currentTime;
+          }
+        }
+        scheduleSend(newChats, texts);
+      }
     });
 
     chatObserver.observe(container, { childList: true, subtree: true });

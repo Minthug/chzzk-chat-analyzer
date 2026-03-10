@@ -140,19 +140,17 @@ function flushWindow(session) {
     return;
   }
 
-  const liveElapsedSec = session.pageType === 'live'
+  // VOD에서 videoTimestamp를 얻지 못한 경우 wall-clock 폴백으로 동작
+  const hasVodSec = session.pageType === 'vod' && session.currentWindowStartSec != null;
+  const liveElapsedSec = !hasVodSec && session.currentWindowStartMs != null
     ? Math.floor((session.currentWindowStartMs - session.startedAt) / 1000)
     : null;
   const windowEntry = {
     windowIndex: session.currentWindowIndex,
-    startSec: session.pageType === 'vod'
-      ? session.currentWindowStartSec
-      : liveElapsedSec,
-    startMs: session.pageType === 'live'
-      ? session.currentWindowStartMs
-      : null,
+    startSec: hasVodSec ? session.currentWindowStartSec : liveElapsedSec,
+    startMs: !hasVodSec ? session.currentWindowStartMs : null,
     count: session.currentWindowCount,
-    hms: session.pageType === 'vod'
+    hms: hasVodSec
       ? secToHMS(session.currentWindowStartSec)
       : secToHMS(liveElapsedSec),
   };
@@ -289,8 +287,8 @@ function processKeywords(session, texts, msg) {
     }).length;
     const ks = initKeywordState(session, keyword);
 
-    if (msg.pageType === 'vod') {
-      const vt = msg.videoTimestamp ?? 0;
+    if (msg.pageType === 'vod' && msg.videoTimestamp != null) {
+      const vt = msg.videoTimestamp;
       if (ks.currentWindowStartSec === null) {
         ks.currentWindowStartSec = Math.floor(vt / WINDOW_SIZE_SEC) * WINDOW_SIZE_SEC;
       }
@@ -301,6 +299,7 @@ function processKeywords(session, texts, msg) {
       }
       ks.currentCount += matchCount;
     } else {
+      // Live 또는 VOD에서 videoTimestamp 없는 경우: 실시간 기반
       const now = msg.wallTimestamp;
       if (ks.currentWindowStartMs === null) ks.currentWindowStartMs = now;
       if (now - ks.currentWindowStartMs >= WINDOW_SIZE_SEC * 1000) {
@@ -319,17 +318,17 @@ function handleChatMessage(msg) {
   session.pageType = msg.pageType;
   session.totalMessages += msg.count;
 
-  if (msg.pageType === 'vod') {
-    const vt = msg.videoTimestamp ?? 0;
+  if (msg.pageType === 'vod' && msg.videoTimestamp != null) {
+    // VOD + 유효한 영상 타임스탬프: 영상 시간 기반 윈도우
+    const vt = msg.videoTimestamp;
 
-    // Initialize window start
     if (session.currentWindowStartSec === null) {
       session.currentWindowStartSec = Math.floor(vt / WINDOW_SIZE_SEC) * WINDOW_SIZE_SEC;
     }
 
     const expectedWindowIdx = Math.floor(vt / WINDOW_SIZE_SEC);
 
-    // If jumped past one or more windows (fast forward), flush them
+    // 빨리감기 등으로 여러 윈도우를 건너뛴 경우 플러시
     while (session.currentWindowIndex < expectedWindowIdx) {
       flushWindow(session);
       session.currentWindowStartSec = session.currentWindowIndex * WINDOW_SIZE_SEC;
@@ -337,7 +336,7 @@ function handleChatMessage(msg) {
 
     session.currentWindowCount += msg.count;
   } else {
-    // Live: wall-clock based
+    // Live 또는 VOD에서 videoTimestamp를 얻지 못한 경우: 실시간 기반 윈도우
     const now = msg.wallTimestamp;
 
     if (session.currentWindowStartMs === null) {
