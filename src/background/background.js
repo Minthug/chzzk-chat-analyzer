@@ -42,11 +42,11 @@ function getSession(pageId) {
       restoredFromStorage: false, // restoreSession이 이미 실행됐으면 재실행 방지
       // Array of { windowIndex, startSec, count }
       windows: [],
-      // Current accumulating window
+      // Current accumulating window (wall-clock 기반으로 통일)
       currentWindowIndex: 0,
       currentWindowCount: 0,
-      currentWindowStartSec: null, // for VOD; null for live
-      currentWindowStartMs: null,  // for live
+      currentWindowStartMs: null,  // wall-clock 기반 (live/VOD 공통)
+      currentWindowStartSec: null, // VOD 표시용 (영상 시간), 윈도우 진행에는 미사용
       // Detected spikes
       spikes: [],
       totalMessages: 0,
@@ -140,19 +140,17 @@ function flushWindow(session) {
     return;
   }
 
-  // VOD에서 videoTimestamp를 얻지 못한 경우 wall-clock 폴백으로 동작
-  const hasVodSec = session.pageType === 'vod' && session.currentWindowStartSec != null;
-  const liveElapsedSec = !hasVodSec && session.currentWindowStartMs != null
+  // VOD: currentWindowStartSec(영상 시간)이 있으면 표시에 사용, 없으면 경과 시간
+  const elapsedSec = session.currentWindowStartMs != null
     ? Math.floor((session.currentWindowStartMs - session.startedAt) / 1000)
     : null;
+  const vodSec = session.pageType === 'vod' ? session.currentWindowStartSec : null;
   const windowEntry = {
     windowIndex: session.currentWindowIndex,
-    startSec: hasVodSec ? session.currentWindowStartSec : liveElapsedSec,
-    startMs: !hasVodSec ? session.currentWindowStartMs : null,
-    count: session.currentWindowCount,
-    hms: hasVodSec
-      ? secToHMS(session.currentWindowStartSec)
-      : secToHMS(liveElapsedSec),
+    startSec: vodSec ?? elapsedSec,
+    startMs:  session.currentWindowStartMs,
+    count:    session.currentWindowCount,
+    hms:      secToHMS(vodSec ?? elapsedSec),
   };
 
   session.windows.push(windowEntry);
@@ -235,17 +233,16 @@ function flushKeywordWindow(session, keyword) {
     return;
   }
 
-  const kwLiveElapsedSec = session.pageType === 'live'
+  const kwElapsedSec = ks.currentWindowStartMs != null
     ? Math.floor((ks.currentWindowStartMs - session.startedAt) / 1000)
     : null;
+  const kwVodSec = session.pageType === 'vod' ? ks.currentWindowStartSec : null;
   const windowEntry = {
     windowIndex: ks.currentWindowIndex,
-    startSec: session.pageType === 'vod'  ? ks.currentWindowStartSec : kwLiveElapsedSec,
-    startMs:  session.pageType === 'live' ? ks.currentWindowStartMs  : null,
+    startSec: kwVodSec ?? kwElapsedSec,
+    startMs:  ks.currentWindowStartMs,
     count:    ks.currentCount,
-    hms:      session.pageType === 'vod'
-      ? secToHMS(ks.currentWindowStartSec)
-      : secToHMS(kwLiveElapsedSec),
+    hms:      secToHMS(kwVodSec ?? kwElapsedSec),
   };
 
   ks.windows.push(windowEntry);
@@ -287,36 +284,21 @@ function processKeywords(session, texts, msg) {
     }).length;
     const ks = initKeywordState(session, keyword);
 
-    if (msg.pageType === 'vod' && msg.videoTimestamp != null) {
-      const vt = msg.videoTimestamp;
-      const expectedIdx = Math.floor(vt / WINDOW_SIZE_SEC);
-
-      // 역방향 탐색: 키워드 윈도우도 초기화
-      if (expectedIdx < ks.currentWindowIndex) {
-        ks.currentWindowIndex    = expectedIdx;
-        ks.currentCount          = 0;
-        ks.currentWindowStartSec = expectedIdx * WINDOW_SIZE_SEC;
-        ks.windows               = [];
+    // 키워드도 wall-clock 기반으로 통일
+    const now = msg.wallTimestamp;
+    if (ks.currentWindowStartMs === null) {
+      ks.currentWindowStartMs  = now;
+      if (msg.pageType === 'vod' && msg.videoTimestamp > 0) {
+        ks.currentWindowStartSec = Math.floor(msg.videoTimestamp);
       }
-
-      if (ks.currentWindowStartSec === null) {
-        ks.currentWindowStartSec = expectedIdx * WINDOW_SIZE_SEC;
-      }
-      while (ks.currentWindowIndex < expectedIdx) {
-        flushKeywordWindow(session, keyword);
-        ks.currentWindowStartSec = ks.currentWindowIndex * WINDOW_SIZE_SEC;
-      }
-      ks.currentCount += matchCount;
-    } else {
-      // Live 또는 VOD에서 videoTimestamp 없는 경우: 실시간 기반
-      const now = msg.wallTimestamp;
-      if (ks.currentWindowStartMs === null) ks.currentWindowStartMs = now;
-      if (now - ks.currentWindowStartMs >= WINDOW_SIZE_SEC * 1000) {
-        flushKeywordWindow(session, keyword);
-        ks.currentWindowStartMs = now;
-      }
-      ks.currentCount += matchCount;
     }
+    if (now - ks.currentWindowStartMs >= WINDOW_SIZE_SEC * 1000) {
+      flushKeywordWindow(session, keyword);
+      ks.currentWindowStartMs  = now;
+      ks.currentWindowStartSec = (msg.pageType === 'vod' && msg.videoTimestamp > 0)
+        ? Math.floor(msg.videoTimestamp) : null;
+    }
+    ks.currentCount += matchCount;
   }
 }
 
@@ -327,50 +309,28 @@ function handleChatMessage(msg) {
   session.pageType = msg.pageType;
   session.totalMessages += msg.count;
 
-  if (msg.pageType === 'vod' && msg.videoTimestamp != null) {
-    // VOD + 유효한 영상 타임스탬프: 영상 시간 기반 윈도우
-    const vt = msg.videoTimestamp;
-    const expectedWindowIdx = Math.floor(vt / WINDOW_SIZE_SEC);
+  // 윈도우 진행: VOD/라이브 모두 wall-clock 기반으로 통일
+  // (videoTimestamp는 부정확·null 가능성이 높아 윈도우 기준으로 부적합)
+  const now = msg.wallTimestamp;
 
-    // 역방향 탐색 감지: 현재 윈도우보다 이전 구간으로 돌아온 경우
-    // windows/keywordState 초기화 → 새 구간부터 다시 감지
-    if (expectedWindowIdx < session.currentWindowIndex) {
-      console.log('[chzzk-analyzer] VOD backward seek detected, resetting window state');
-      session.windows            = [];
-      session.currentWindowIndex = expectedWindowIdx;
-      session.currentWindowCount = 0;
-      session.currentWindowStartSec = expectedWindowIdx * WINDOW_SIZE_SEC;
-      session.keywordState       = {};
+  if (session.currentWindowStartMs === null) {
+    session.currentWindowStartMs = now;
+    // VOD: 이 윈도우의 표시 시간(영상 기준) 기록
+    if (msg.pageType === 'vod' && msg.videoTimestamp > 0) {
+      session.currentWindowStartSec = Math.floor(msg.videoTimestamp);
     }
-
-    if (session.currentWindowStartSec === null) {
-      session.currentWindowStartSec = expectedWindowIdx * WINDOW_SIZE_SEC;
-    }
-
-    // 빨리감기 등으로 여러 윈도우를 건너뛴 경우 플러시
-    while (session.currentWindowIndex < expectedWindowIdx) {
-      flushWindow(session);
-      session.currentWindowStartSec = session.currentWindowIndex * WINDOW_SIZE_SEC;
-    }
-
-    session.currentWindowCount += msg.count;
-  } else {
-    // Live 또는 VOD에서 videoTimestamp를 얻지 못한 경우: 실시간 기반 윈도우
-    const now = msg.wallTimestamp;
-
-    if (session.currentWindowStartMs === null) {
-      session.currentWindowStartMs = now;
-    }
-
-    const elapsed = now - session.currentWindowStartMs;
-
-    if (elapsed >= WINDOW_SIZE_SEC * 1000) {
-      flushWindow(session);
-      session.currentWindowStartMs = now;
-    }
-
-    session.currentWindowCount += msg.count;
   }
+
+  const elapsed = now - session.currentWindowStartMs;
+  if (elapsed >= WINDOW_SIZE_SEC * 1000) {
+    flushWindow(session);
+    session.currentWindowStartMs = now;
+    // 새 윈도우의 표시 시간 갱신
+    session.currentWindowStartSec = (msg.pageType === 'vod' && msg.videoTimestamp > 0)
+      ? Math.floor(msg.videoTimestamp) : null;
+  }
+
+  session.currentWindowCount += msg.count;
 
   // Keyword processing
   processKeywords(session, msg.texts || [], msg);
