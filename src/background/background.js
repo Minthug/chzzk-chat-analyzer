@@ -15,13 +15,23 @@ const DEFAULT_Z_THRESH  = 3.0;
 const STORAGE_KEY    = 'chzzk_analyzer_session';
 
 // 서비스 워커 시작 시 사용자 설정 로드
-chrome.storage.sync.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, paused: false, keywords: [] }, (s) => {
+// 설정 로드 완료 전 도착한 CHAT_MESSAGE는 큐에 보관 → 로드 후 처리 (레이스 컨디션 방지)
+let SETTINGS_LOADED = false;
+const pendingChatMessages = [];
+
+chrome.storage.local.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, paused: false, keywords: [] }, (s) => {
   Z_THRESH        = s.zThreshold;
   WINDOW_SIZE_SEC = s.windowSize;
   SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
   AUTO_EXPORT     = s.autoExport    ?? true;
   PAUSED          = s.paused        ?? false;
   KEYWORDS        = s.keywords || [];
+  SETTINGS_LOADED = true;
+  // 설정 로드 전 도착한 채팅 메시지 처리
+  if (pendingChatMessages.length > 0) {
+    console.log('[chzzk-analyzer] Flushing', pendingChatMessages.length, 'pending chat messages');
+    pendingChatMessages.splice(0).forEach(m => handleChatMessage(m));
+  }
   console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, AUTO_EXPORT, PAUSED, KEYWORDS });
 });
 
@@ -569,7 +579,7 @@ async function exportAndKeepSession(pageId) {
 
 // ── Get settings ─────────────────────────────────────────────────────────────
 async function getSettings() {
-  const result = await chrome.storage.sync.get({
+  const result = await chrome.storage.local.get({
     zThreshold: DEFAULT_Z_THRESH,
     windowSize: WINDOW_SIZE_SEC,
     saveThumbnail: true,
@@ -705,7 +715,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
 
     case 'CHAT_MESSAGE':
-      handleChatMessage(msg);
+      if (!SETTINGS_LOADED) {
+        // 설정 로드 완료 전: 큐에 보관 (잘못된 설정으로 처리하지 않음)
+        pendingChatMessages.push(msg);
+      } else {
+        handleChatMessage(msg);
+      }
       break;
 
     case 'PAGE_NAVIGATE': {
@@ -878,7 +893,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // content script에도 즉시 전파 (서비스 워커 재시작 무관하게 차단)
         notifyTabs(null, { type: 'SET_PAUSED', paused: PAUSED });
       }
-      chrome.storage.sync.set(msg.settings).then(() => sendResponse({ ok: true }));
+      chrome.storage.local.set(msg.settings).then(() => sendResponse({ ok: true }));
       return true;
     }
   }
