@@ -21,20 +21,42 @@ const pendingChatMessages = [];
 // SAVE_SETTINGS가 startup get 콜백보다 먼저 실행된 경우, 콜백이 그 값을 덮어쓰지 않도록 추적
 const _explicitSettingKeys = new Set();
 
+function _applyAndFlush() {
+  SETTINGS_LOADED = true;
+  if (pendingChatMessages.length > 0) {
+    console.log('[chzzk-analyzer] Flushing', pendingChatMessages.length, 'pending chat messages');
+    pendingChatMessages.splice(0).forEach(m => handleChatMessage(m));
+  }
+  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, AUTO_EXPORT, PAUSED, KEYWORDS });
+}
+
 chrome.storage.local.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, paused: false, keywords: [] }, (s) => {
   if (!_explicitSettingKeys.has('zThreshold'))    Z_THRESH        = s.zThreshold;
   if (!_explicitSettingKeys.has('windowSize'))    WINDOW_SIZE_SEC = s.windowSize;
   if (!_explicitSettingKeys.has('saveThumbnail')) SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
   if (!_explicitSettingKeys.has('autoExport'))    AUTO_EXPORT     = s.autoExport    ?? true;
   if (!_explicitSettingKeys.has('paused'))        PAUSED          = s.paused        ?? false;
-  if (!_explicitSettingKeys.has('keywords'))      KEYWORDS        = s.keywords || [];
-  SETTINGS_LOADED = true;
-  // 설정 로드 전 도착한 채팅 메시지 처리
-  if (pendingChatMessages.length > 0) {
-    console.log('[chzzk-analyzer] Flushing', pendingChatMessages.length, 'pending chat messages');
-    pendingChatMessages.splice(0).forEach(m => handleChatMessage(m));
+
+  if (!_explicitSettingKeys.has('keywords')) {
+    if (s.keywords?.length) {
+      // local에 키워드 있음 → 그대로 사용
+      KEYWORDS = s.keywords;
+      _applyAndFlush();
+    } else {
+      // local에 키워드 없음 → storage.sync에서 한 번 마이그레이션 시도
+      chrome.storage.sync.get({ keywords: [] }, (sync) => {
+        if (sync.keywords?.length) {
+          KEYWORDS = sync.keywords;
+          chrome.storage.local.set({ keywords: sync.keywords });
+          console.log('[chzzk-analyzer] Keywords migrated from sync:', sync.keywords);
+        }
+        _applyAndFlush();
+      });
+      return; // 마이그레이션 완료 후 _applyAndFlush 호출
+    }
+  } else {
+    _applyAndFlush();
   }
-  console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, AUTO_EXPORT, PAUSED, KEYWORDS });
 });
 
 // ── In-memory state ──────────────────────────────────────────────────────────
