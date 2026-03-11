@@ -18,14 +18,16 @@ const STORAGE_KEY    = 'chzzk_analyzer_session';
 // 설정 로드 완료 전 도착한 CHAT_MESSAGE는 큐에 보관 → 로드 후 처리 (레이스 컨디션 방지)
 let SETTINGS_LOADED = false;
 const pendingChatMessages = [];
+// SAVE_SETTINGS가 startup get 콜백보다 먼저 실행된 경우, 콜백이 그 값을 덮어쓰지 않도록 추적
+const _explicitSettingKeys = new Set();
 
 chrome.storage.local.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, paused: false, keywords: [] }, (s) => {
-  Z_THRESH        = s.zThreshold;
-  WINDOW_SIZE_SEC = s.windowSize;
-  SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
-  AUTO_EXPORT     = s.autoExport    ?? true;
-  PAUSED          = s.paused        ?? false;
-  KEYWORDS        = s.keywords || [];
+  if (!_explicitSettingKeys.has('zThreshold'))    Z_THRESH        = s.zThreshold;
+  if (!_explicitSettingKeys.has('windowSize'))    WINDOW_SIZE_SEC = s.windowSize;
+  if (!_explicitSettingKeys.has('saveThumbnail')) SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
+  if (!_explicitSettingKeys.has('autoExport'))    AUTO_EXPORT     = s.autoExport    ?? true;
+  if (!_explicitSettingKeys.has('paused'))        PAUSED          = s.paused        ?? false;
+  if (!_explicitSettingKeys.has('keywords'))      KEYWORDS        = s.keywords || [];
   SETTINGS_LOADED = true;
   // 설정 로드 전 도착한 채팅 메시지 처리
   if (pendingChatMessages.length > 0) {
@@ -258,9 +260,8 @@ function flushKeywordWindow(session, keyword) {
   ks.windows.push(windowEntry);
   if (ks.windows.length > 20) ks.windows = ks.windows.slice(-20);
 
-  // 키워드는 빈 윈도우를 건너뛰므로 베이스라인이 부족할 때 오탐 방지
-  // LAG_WINDOWS+1개 이상 쌓인 후 감지 시작
-  const result = detectSpike(ks.windows, Z_THRESH, LAG_WINDOWS + 1);
+  // 키워드는 빈 윈도우를 건너뛰므로 std 계산을 위해 최소 3개 이상 필요
+  const result = detectSpike(ks.windows, Z_THRESH, 3);
   if (result.isSpike) {
     const spike = {
       keyword,
@@ -882,6 +883,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     case 'SAVE_SETTINGS': {
+      // startup get 콜백이 이 값들을 덮어쓰지 못하도록 명시적 설정 키 추적
+      Object.keys(msg.settings).forEach(k => _explicitSettingKeys.add(k));
       // storage 저장 전에 즉시 메모리 반영 (PAUSED는 특히 즉각 적용 필요)
       if (msg.settings.zThreshold    !== undefined) Z_THRESH        = msg.settings.zThreshold;
       if (msg.settings.windowSize    !== undefined) WINDOW_SIZE_SEC = msg.settings.windowSize;
