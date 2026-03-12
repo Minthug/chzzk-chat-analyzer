@@ -349,7 +349,12 @@ function processKeywords(session, texts, msg) {
         ks.currentWindowStartSec = Math.floor(msg.videoTimestamp);
       }
     }
-    if (now - ks.currentWindowStartMs >= WINDOW_SIZE_SEC * 1000) {
+    // VOD: 영상 타임스탬프 기준 윈도우 진행 (wall-clock은 preload 시 신뢰 불가)
+    const kwShouldFlush = (msg.pageType === 'vod' && msg.videoTimestamp > 0 && ks.currentWindowStartSec != null)
+      ? (msg.videoTimestamp - ks.currentWindowStartSec) >= WINDOW_SIZE_SEC
+      : (now - ks.currentWindowStartMs) >= WINDOW_SIZE_SEC * 1000;
+
+    if (kwShouldFlush) {
       flushKeywordWindow(session, keyword);
       ks.currentWindowStartMs  = now;
       ks.currentWindowStartSec = (msg.pageType === 'vod' && msg.videoTimestamp > 0)
@@ -378,12 +383,18 @@ function handleChatMessage(msg) {
     }
   }
 
-  const elapsed = now - session.currentWindowStartMs;
-  if (elapsed >= WINDOW_SIZE_SEC * 1000) {
+  // VOD: 채팅이 한꺼번에 preload되면 wall-clock이 거의 0ms → 윈도우가 절대 flush 안 됨
+  // → VOD는 영상 타임스탬프 기준으로 윈도우 진행, 라이브는 wall-clock 유지
+  const isVod = msg.pageType === 'vod';
+  const shouldFlush = (isVod && msg.videoTimestamp > 0 && session.currentWindowStartSec != null)
+    ? (msg.videoTimestamp - session.currentWindowStartSec) >= WINDOW_SIZE_SEC
+    : (now - session.currentWindowStartMs) >= WINDOW_SIZE_SEC * 1000;
+
+  if (shouldFlush) {
     flushWindow(session);
     session.currentWindowStartMs = now;
     // 새 윈도우의 표시 시간 갱신
-    session.currentWindowStartSec = (msg.pageType === 'vod' && msg.videoTimestamp > 0)
+    session.currentWindowStartSec = (isVod && msg.videoTimestamp > 0)
       ? Math.floor(msg.videoTimestamp) : null;
   }
 
@@ -602,20 +613,32 @@ async function clearSession(pageId) {
 // ── 내보내기만 하고 세션 데이터는 보존 (다른 방송으로 이동 시) ──────────────
 // clearSession과 달리 storage의 데이터를 삭제하지 않아 돌아왔을 때 스파이크 복원 가능
 async function exportAndKeepSession(pageId) {
+  const mem = sessions[pageId];
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
     const existing = result[STORAGE_KEY] || {};
-    const stored = existing[pageId];
 
-    if (stored && (stored.spikes?.length > 0 || stored.keywordSpikes?.length > 0)) {
-      const mem = sessions[pageId];
-      if (mem?.channelName) stored.channelName = mem.channelName;
-      if (mem?.liveTitle)   stored.liveTitle   = mem.liveTitle;
-      // storage에 channelName/liveTitle 업데이트 반영
-      existing[pageId] = stored;
+    // in-memory 최신 상태를 storage에 직접 반영
+    // (persistTimer 500ms 디바운스로 인해 마지막 채팅이 저장 안 된 경우 대비)
+    if (mem) {
+      existing[pageId] = {
+        pageId:        mem.pageId,
+        pageType:      mem.pageType,
+        startedAt:     mem.startedAt,
+        windows:       mem.windows.slice(-200),
+        spikes:        mem.spikes,
+        keywordSpikes: mem.keywordSpikes,
+        totalMessages: mem.totalMessages,
+        channelName:   mem.channelName || null,
+        liveTitle:     mem.liveTitle   || null,
+        managerChats:  mem.managerChats || [],
+      };
       await chrome.storage.local.set({ [STORAGE_KEY]: existing });
-      // 자동 저장 설정이 켜진 경우에만 내보내기
-      if (AUTO_EXPORT) await autoExport(stored);
+    }
+
+    const stored = existing[pageId];
+    if (AUTO_EXPORT && stored && (stored.spikes?.length > 0 || stored.keywordSpikes?.length > 0)) {
+      await autoExport(stored);
     }
   } catch (e) {
     console.error('[chzzk-analyzer] Failed to export session:', e);
