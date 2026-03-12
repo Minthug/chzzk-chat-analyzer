@@ -284,11 +284,20 @@ function flushKeywordWindow(session, keyword) {
 
   // 키워드는 빈 윈도우를 건너뛰므로 std 계산을 위해 최소 3개 이상 필요
   const result = detectSpike(ks.windows, Z_THRESH, 3);
-  if (result.isSpike) {
+
+  // std=0 폴백: 이전 윈도우에 키워드가 없어서 표준편차가 0인 경우
+  // Z-score 수식이 0/0이 되어 항상 미감지 → 최소 등장 횟수로 대신 판단
+  // ex) 평균 0회 키워드가 갑자기 2회 이상 → 급증으로 처리
+  const fallbackSpike = !result.isSpike
+    && result.std === 0
+    && result.mean < 1
+    && windowEntry.count >= Math.max(2, Math.ceil(Z_THRESH));
+
+  if (result.isSpike || fallbackSpike) {
     const spike = {
       keyword,
       ...windowEntry,
-      zScore: result.zScore,
+      zScore: result.isSpike ? result.zScore : windowEntry.count,
       mean:   result.mean,
       ratio:  result.mean > 0
         ? Math.round((windowEntry.count / result.mean) * 100) / 100
