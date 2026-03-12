@@ -184,6 +184,7 @@ function flushWindow(session) {
     startSec: vodSec ?? elapsedSec,
     startMs:  session.currentWindowStartMs,
     count:    session.currentWindowCount,
+    windowSec: WINDOW_SIZE_SEC,
     hms:      secToHMS(vodSec ?? elapsedSec),
   };
 
@@ -276,6 +277,7 @@ function flushKeywordWindow(session, keyword) {
     startSec: kwVodSec ?? kwElapsedSec,
     startMs:  ks.currentWindowStartMs,
     count:    ks.currentCount,
+    windowSec: WINDOW_SIZE_SEC,
     hms:      secToHMS(kwVodSec ?? kwElapsedSec),
   };
 
@@ -539,7 +541,7 @@ function formatSpikesToTxt(session) {
     `# 페이지 ID: ${session.pageId}  |  생성: ${now}`,
     '',
     ...allSpikes.map(s =>
-      `${s.hms} [${s._type}] - ${s.count}${s._type === '포인트' ? '개' : '회'}/30s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
+      `${s.hms} [${s._type}] - ${s.count}${s._type === '포인트' ? '개' : '회'}/${s.windowSec ?? 30}s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
     ),
   ];
   return lines.join('\n');

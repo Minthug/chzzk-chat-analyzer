@@ -153,7 +153,7 @@ function getPageType() {
     if (!video || spike.startSec == null) return;
     video.currentTime = spike.startSec;
     video.play().catch(() => {});
-    showToast(`▶ ${spike.hms}  ${spike.count}개/30s  Z=${spike.zScore}`);
+    showToast(`▶ ${spike.hms}  ${spike.count}개/${spike.windowSec ?? 30}s  Z=${spike.zScore}`);
   }
 
   document.addEventListener('keydown', (e) => {

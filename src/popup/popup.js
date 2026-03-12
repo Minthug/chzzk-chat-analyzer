@@ -170,7 +170,7 @@ function renderSession(session) {
         }
         <div class="spike-info">
           <span class="spike-time">▶ ${s.hms}${top3.has(i) ? ' <span class="spike-star">★</span>' : ''}</span>
-          <span class="spike-count">${s.count}개/30s</span>
+          <span class="spike-count">${s.count}개/${s.windowSec ?? 30}s</span>
           <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
           <div class="spike-memo-wrap${s.memo ? ' has-memo' : ''}">
             <span class="spike-memo-icon">✏</span>
@@ -211,7 +211,7 @@ function formatTxt(session) {
     '',
     ...allSpikes.map(
       (s) =>
-        `${s.hms} [${s._type}] - ${s.count}${s._type === '포인트' ? '개' : '회'}/30s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
+        `${s.hms} [${s._type}] - ${s.count}${s._type === '포인트' ? '개' : '회'}/${s.windowSec ?? 30}s${s.ratio ? ', 평균 대비 ' + s.ratio + 'x' : ''}, Z=${s.zScore}${s.memo ? ' // ' + s.memo : ''}`
     ),
   ];
   return lines.join('\n');
@@ -456,7 +456,7 @@ function renderKeywordSpikes(session) {
         <div class="keyword-badge">${s.keyword}</div>
         <div class="spike-info">
           <span class="spike-time">▶ ${s.hms}${top3.has(i) ? ' <span class="spike-star">★</span>' : ''}</span>
-          <span class="spike-count">${s.count}회/30s</span>
+          <span class="spike-count">${s.count}회/${s.windowSec ?? 30}s</span>
           <span class="spike-ratio">${s.ratio ? s.ratio + 'x' : ''} Z=${s.zScore}</span>
           <div class="spike-memo-wrap${s.memo ? ' has-memo' : ''}">
             <span class="spike-memo-icon">✏</span>
