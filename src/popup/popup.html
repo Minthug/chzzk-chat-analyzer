@@ -263,6 +263,11 @@
       color: #888;
       margin-bottom: 3px;
     }
+    .setting-desc {
+      font-size: 9px;
+      color: #555;
+      margin-top: 3px;
+    }
     .setting-group input {
       width: 100%;
       background: #1a1a2e;
@@ -455,12 +460,14 @@
     <div class="section-title">설정</div>
     <div class="settings-row">
       <div class="setting-group">
-        <label>Z-Score 임계값 (기본 3.0)</label>
+        <label>감지 민감도</label>
         <input type="number" id="setting-z" min="1" max="10" step="0.1" value="3.0" />
+        <div class="setting-desc">낮을수록 작은 급증도 감지 (기본 3.0)</div>
       </div>
       <div class="setting-group">
-        <label>윈도우 크기 (초, 기본 30)</label>
+        <label>집계 주기 (초)</label>
         <input type="number" id="setting-window" min="10" max="300" step="10" value="30" />
+        <div class="setting-desc">N초 단위로 채팅 수를 집계 (기본 30)</div>
       </div>
     </div>
     <label class="setting-toggle">
