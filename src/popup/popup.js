@@ -546,5 +546,10 @@ document.getElementById('donate-account').addEventListener('click', () => {
   });
 });
 
+// ── 피드백 버튼 ───────────────────────────────────────────────────────────────
+document.getElementById('btn-feedback').addEventListener('click', () => {
+  chrome.tabs.create({ url: 'https://github.com/Minthug/chzzk-chat-analyzer/issues' });
+});
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init();
