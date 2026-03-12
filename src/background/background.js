@@ -30,34 +30,47 @@ function _applyAndFlush() {
   console.log('[chzzk-analyzer] Settings loaded:', { Z_THRESH, WINDOW_SIZE_SEC, SAVE_THUMBNAIL, AUTO_EXPORT, PAUSED, KEYWORDS });
 }
 
-chrome.storage.local.get({ zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, paused: false, keywords: [] }, (s) => {
-  if (!_explicitSettingKeys.has('zThreshold'))    Z_THRESH        = s.zThreshold;
-  if (!_explicitSettingKeys.has('windowSize'))    WINDOW_SIZE_SEC = s.windowSize;
-  if (!_explicitSettingKeys.has('saveThumbnail')) SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
-  if (!_explicitSettingKeys.has('autoExport'))    AUTO_EXPORT     = s.autoExport    ?? true;
-  if (!_explicitSettingKeys.has('paused'))        PAUSED          = s.paused        ?? false;
-
-  if (!_explicitSettingKeys.has('keywords')) {
-    if (s.keywords?.length) {
-      // local에 키워드 있음 → 그대로 사용
-      KEYWORDS = s.keywords;
-      _applyAndFlush();
-    } else {
-      // local에 키워드 없음 → storage.sync에서 한 번 마이그레이션 시도
-      chrome.storage.sync.get({ keywords: [] }, (sync) => {
-        if (sync.keywords?.length) {
-          KEYWORDS = sync.keywords;
-          chrome.storage.local.set({ keywords: sync.keywords });
-          console.log('[chzzk-analyzer] Keywords migrated from sync:', sync.keywords);
+chrome.storage.local.get(
+  { zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, paused: false, keywords: [], _settingsMigrated: false },
+  (s) => {
+    if (!s._settingsMigrated) {
+      // 최초 1회: storage.sync → storage.local 전체 설정 마이그레이션
+      chrome.storage.sync.get(
+        { zThreshold: 3.0, windowSize: 30, saveThumbnail: true, autoExport: true, paused: false, keywords: [] },
+        (sync) => {
+          const migrated = {
+            zThreshold:    sync.zThreshold    ?? s.zThreshold,
+            windowSize:    sync.windowSize    ?? s.windowSize,
+            saveThumbnail: sync.saveThumbnail ?? s.saveThumbnail,
+            autoExport:    sync.autoExport    ?? s.autoExport,
+            paused:        sync.paused        ?? s.paused,
+            keywords:      sync.keywords?.length ? sync.keywords : (s.keywords || []),
+            _settingsMigrated: true,
+          };
+          chrome.storage.local.set(migrated);
+          console.log('[chzzk-analyzer] Settings migrated from sync:', migrated);
+          if (!_explicitSettingKeys.has('zThreshold'))    Z_THRESH        = migrated.zThreshold;
+          if (!_explicitSettingKeys.has('windowSize'))    WINDOW_SIZE_SEC = migrated.windowSize;
+          if (!_explicitSettingKeys.has('saveThumbnail')) SAVE_THUMBNAIL  = migrated.saveThumbnail ?? true;
+          if (!_explicitSettingKeys.has('autoExport'))    AUTO_EXPORT     = migrated.autoExport    ?? true;
+          if (!_explicitSettingKeys.has('paused'))        PAUSED          = migrated.paused        ?? false;
+          if (!_explicitSettingKeys.has('keywords'))      KEYWORDS        = migrated.keywords;
+          _applyAndFlush();
         }
-        _applyAndFlush();
-      });
-      return; // 마이그레이션 완료 후 _applyAndFlush 호출
+      );
+      return;
     }
-  } else {
+
+    // 마이그레이션 완료된 이후: local에서 바로 적용
+    if (!_explicitSettingKeys.has('zThreshold'))    Z_THRESH        = s.zThreshold;
+    if (!_explicitSettingKeys.has('windowSize'))    WINDOW_SIZE_SEC = s.windowSize;
+    if (!_explicitSettingKeys.has('saveThumbnail')) SAVE_THUMBNAIL  = s.saveThumbnail ?? true;
+    if (!_explicitSettingKeys.has('autoExport'))    AUTO_EXPORT     = s.autoExport    ?? true;
+    if (!_explicitSettingKeys.has('paused'))        PAUSED          = s.paused        ?? false;
+    if (!_explicitSettingKeys.has('keywords'))      KEYWORDS        = s.keywords || [];
     _applyAndFlush();
   }
-});
+);
 
 // ── In-memory state ──────────────────────────────────────────────────────────
 // keyed by pageId
