@@ -205,10 +205,18 @@ function flushWindow(session) {
 
   // Spike detection
   const result = detectSpike(session.windows);
-  if (result.isSpike) {
+  // 고채팅량 방송 fallback: Z-score가 작동 안 할 만큼 채팅이 균일하게 많을 때
+  // 평균의 140% 이상이면 급증으로 판정 (라이브/VOD 공통)
+  const ratioSpike = !result.isSpike
+    && result.mean >= 30
+    && result.count >= Math.round(result.mean * 1.4);
+
+  if (result.isSpike || ratioSpike) {
     const spike = {
       ...windowEntry,
-      zScore: result.zScore,
+      zScore: result.isSpike
+        ? result.zScore
+        : Math.round((result.count / result.mean) * 100) / 100,
       mean: result.mean,
       std: result.std,
       ratio: result.mean > 0
@@ -301,18 +309,23 @@ function flushKeywordWindow(session, keyword) {
   const result = detectSpike(ks.windows, Z_THRESH, 3);
 
   // std=0 폴백: 이전 윈도우에 키워드가 없어서 표준편차가 0인 경우
-  // Z-score 수식이 0/0이 되어 항상 미감지 → 최소 등장 횟수로 대신 판단
-  // ex) 평균 0회 키워드가 갑자기 2회 이상 → 급증으로 처리
   const fallbackSpike = !result.isSpike
     && result.std === 0
     && result.mean < 1
     && windowEntry.count >= Math.max(2, Math.ceil(Z_THRESH));
 
-  if (result.isSpike || fallbackSpike) {
+  // 고채팅량 방송 fallback: 평균의 140% 이상이면 급증 판정
+  const ratioSpike = !result.isSpike && !fallbackSpike
+    && result.mean >= 10
+    && windowEntry.count >= Math.round(result.mean * 1.4);
+
+  if (result.isSpike || fallbackSpike || ratioSpike) {
     const spike = {
       keyword,
       ...windowEntry,
-      zScore: result.isSpike ? result.zScore : windowEntry.count,
+      zScore: result.isSpike
+        ? result.zScore
+        : Math.round((windowEntry.count / result.mean) * 100) / 100,
       mean:   result.mean,
       ratio:  result.mean > 0
         ? Math.round((windowEntry.count / result.mean) * 100) / 100
