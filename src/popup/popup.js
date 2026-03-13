@@ -546,6 +546,13 @@ document.getElementById('donate-account').addEventListener('click', () => {
   });
 });
 
+// ── 설정 가이드 토글 ──────────────────────────────────────────────────────────
+document.getElementById('btn-guide-toggle').addEventListener('click', function () {
+  const guide = document.getElementById('setting-guide');
+  const isOpen = guide.classList.toggle('open');
+  this.textContent = isOpen ? '💡 채팅량별 추천 설정 닫기 ▴' : '💡 채팅량별 추천 설정 보기 ▾';
+});
+
 // ── 피드백 버튼 ───────────────────────────────────────────────────────────────
 document.getElementById('btn-feedback').addEventListener('click', () => {
   chrome.tabs.create({ url: 'https://github.com/Minthug/chzzk-chat-analyzer/issues' });
