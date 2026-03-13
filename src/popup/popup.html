@@ -391,47 +391,58 @@
       padding: 0 14px 10px;
     }
     .setting-guide-toggle {
-      display: block;
+      display: flex;
+      align-items: center;
+      gap: 5px;
       width: 100%;
-      background: transparent;
-      border: none;
-      color: #444;
+      background: #111120;
+      border: 1px solid #252540;
+      border-radius: 4px;
+      color: #7a8ab0;
       font-size: 10px;
       text-align: left;
       cursor: pointer;
-      padding: 2px 0 8px;
-      transition: color 0.15s;
+      padding: 5px 8px;
+      margin-bottom: 6px;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
-    .setting-guide-toggle:hover { color: #777; }
+    .setting-guide-toggle:hover { background: #15152a; border-color: #3a3a60; color: #a0aad0; }
+    .setting-guide-toggle .guide-arrow { margin-left: auto; font-style: normal; font-size: 9px; }
     .setting-guide {
       display: none;
-      background: #0d0d1e;
-      border: 1px solid #1e1e34;
-      border-radius: 5px;
-      padding: 8px 10px;
       margin-bottom: 8px;
-      font-size: 10px;
-      line-height: 1.7;
     }
     .setting-guide.open { display: block; }
-    .setting-guide-row {
+    .guide-card {
       display: flex;
-      gap: 6px;
-      margin-bottom: 2px;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      margin-bottom: 4px;
     }
-    .guide-tag {
+    .guide-card.high { background: #1e1010; border-left: 3px solid #c0392b; }
+    .guide-card.low  { background: #101e10; border-left: 3px solid #27ae60; }
+    .guide-card-label {
+      font-size: 10px;
+      font-weight: 700;
       flex-shrink: 0;
-      font-size: 9px;
-      font-weight: 600;
-      padding: 1px 5px;
-      border-radius: 3px;
-      line-height: 1.6;
+      width: 52px;
     }
-    .guide-tag.high { background: #2a1a1a; color: #e74c3c; }
-    .guide-tag.low  { background: #1a2a1a; color: #27ae60; }
-    .guide-val { color: #999; }
-    .guide-val b { color: #ccc; }
-    .guide-divider { border: none; border-top: 1px solid #1a1a2e; margin: 6px 0; }
+    .guide-card.high .guide-card-label { color: #e74c3c; }
+    .guide-card.low  .guide-card-label { color: #2ecc71; }
+    .guide-card-vals {
+      font-size: 10px;
+      color: #aaa;
+      line-height: 1.5;
+    }
+    .guide-card-vals b { color: #ddd; }
+    .guide-note {
+      font-size: 9px;
+      color: #444;
+      text-align: center;
+      padding: 2px 0 2px;
+    }
 
     .btn-feedback {
       display: block;
@@ -531,6 +542,21 @@
         <div class="setting-desc">N초 단위로 채팅 수를 집계 (기본 30)</div>
       </div>
     </div>
+    <button class="setting-guide-toggle" id="btn-guide-toggle">
+      💡 채팅량별 추천 설정
+      <em class="guide-arrow">▾</em>
+    </button>
+    <div class="setting-guide" id="setting-guide">
+      <div class="guide-card high">
+        <span class="guide-card-label">채팅 많음</span>
+        <span class="guide-card-vals"><b>집계 주기 15초</b> · <b>민감도 2.0~2.5</b></span>
+      </div>
+      <div class="guide-card low">
+        <span class="guide-card-label">채팅 적음</span>
+        <span class="guide-card-vals"><b>집계 주기 45~60초</b> · <b>민감도 2.0~2.5</b></span>
+      </div>
+      <div class="guide-note">채팅 적음 → 주기 길게(통계 안정) · 채팅 많음 → 주기 짧게(순간 포착)</div>
+    </div>
     <label class="setting-toggle">
       <input type="checkbox" id="setting-thumbnail" checked />
       썸네일 자동 캡처
@@ -540,22 +566,6 @@
       방송 이동/종료 시 TXT 자동 저장
     </label>
     <button class="btn-pause" id="btn-pause">⏸ 채팅 수집 일시중지</button>
-    <button class="setting-guide-toggle" id="btn-guide-toggle">💡 채팅량별 추천 설정 보기 ▾</button>
-    <div class="setting-guide" id="setting-guide">
-      <div class="setting-guide-row">
-        <span class="guide-tag high">채팅 많음</span>
-        <span class="guide-val"><b>집계 주기 15초</b> · <b>민감도 2.0~2.5</b></span>
-      </div>
-      <div class="setting-guide-row">
-        <span class="guide-tag low">채팅 적음</span>
-        <span class="guide-val"><b>집계 주기 45~60초</b> · <b>민감도 2.0~2.5</b></span>
-      </div>
-      <hr class="guide-divider">
-      <div style="color:#555;">
-        채팅이 적으면 주기를 길게 → 통계 안정<br>
-        채팅이 많으면 주기를 짧게 → 순간 반응 포착
-      </div>
-    </div>
     <button class="btn-save" id="btn-save-settings">설정 저장</button>
     <div class="export-row" style="padding: 8px 0 0;">
       <button class="btn btn-txt" id="btn-export-txt" disabled>TXT 내보내기</button>

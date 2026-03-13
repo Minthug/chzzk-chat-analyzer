@@ -550,7 +550,7 @@ document.getElementById('donate-account').addEventListener('click', () => {
 document.getElementById('btn-guide-toggle').addEventListener('click', function () {
   const guide = document.getElementById('setting-guide');
   const isOpen = guide.classList.toggle('open');
-  this.textContent = isOpen ? '💡 채팅량별 추천 설정 닫기 ▴' : '💡 채팅량별 추천 설정 보기 ▾';
+  this.querySelector('.guide-arrow').textContent = isOpen ? '▴' : '▾';
 });
 
 // ── 피드백 버튼 ───────────────────────────────────────────────────────────────
