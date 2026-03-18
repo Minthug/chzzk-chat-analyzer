@@ -367,15 +367,27 @@ function getPageType() {
 
   // ── 컨테이너 탐색 & 재시도 ────────────────────────────────────────────────
   let mountTimer = null;
+  let mountRetryCount = 0;
 
   function tryMount() {
     const container = findChatContainer();
     LOG('tryMount - container:', container ? container.className : 'NOT FOUND');
     if (container) {
+      mountRetryCount = 0;
       startObserving(container);
       injectOverlay();
       watchVideoEnd();
       return;
+    }
+    mountRetryCount++;
+    // 15초 이상 채팅창을 못 찾으면 자동 새로고침 (라이브/VOD 페이지에서만)
+    if (mountRetryCount >= 15) {
+      const pageType = getPageType();
+      if (pageType === 'live' || pageType === 'vod') {
+        INFO('tryMount failed 15 times - auto reloading...');
+        location.reload();
+        return;
+      }
     }
     mountTimer = setTimeout(tryMount, 1000);
   }

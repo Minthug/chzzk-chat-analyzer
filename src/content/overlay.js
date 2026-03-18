@@ -86,6 +86,12 @@
     if (animFrame) cancelAnimationFrame(animFrame);
     function loop() {
       animFrame = requestAnimationFrame(loop);
+      // canvas가 DOM에서 분리된 경우 즉시 재마운트 (React 리마운트 대응)
+      if (graphCanvas && !graphCanvas.isConnected) {
+        graphCanvas = null;
+        markerContainer = null;
+        setupGraph();
+      }
       drawGraph();
     }
     loop();
