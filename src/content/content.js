@@ -32,14 +32,14 @@
   function extractChatInfo(node) {
     // 매니저 뱃지 감지 (img src 기반)
     let isManager = false;
-    const badgeImgs = node.querySelectorAll('[class*="badge_container__"] img');
+    const badgeImgs = node.querySelectorAll('[class*="badge_container"] img');
     for (const img of badgeImgs) {
       if (/manager|operator/.test(img.src || '')) { isManager = true; break; }
     }
 
     // 닉네임
-    const nickEl = node.querySelector('[class*="name_text__"]')
-                || node.querySelector('[class*="live_chatting_username_nickname__"]');
+    const nickEl = node.querySelector('[class*="name_text"]')
+                || node.querySelector('[class*="live_chatting_username_nickname"]');
     const nickname = nickEl?.textContent?.trim() || '';
 
     // 메시지 텍스트
@@ -63,7 +63,7 @@
   // ── 라이브 방송 경과 시간 읽기 ────────────────────────────────────────────
   function getLiveStreamElapsedSec() {
     // "00:53:37 스트리밍 중" 형태의 span 탐색
-    const spans = document.querySelectorAll('[class*="video_information_count__"]');
+    const spans = document.querySelectorAll('[class*="video_information_count"]');
     for (const span of spans) {
       const text = span.textContent?.trim() || '';
       const match = text.match(/^(\d{1,2}):(\d{2}):(\d{2})\s*스트리밍/);
